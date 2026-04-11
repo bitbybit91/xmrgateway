@@ -1,0 +1,32 @@
+{
+  "_comment": "Edit this file with your own values, then run: python website_updater.py",
+
+  "monero_wallet_address": "YOUR_MONERO_WALLET_ADDRESS_HERE",
+
+  "website_root": ".",
+
+  "keywords_file": "keywords.txt",
+
+  "site_url": "http://yoursite.onion",
+
+  "contact_wickr": "yourwickrhandle",
+  "contact_email": "contact@example.com",
+
+  "continent_pricing": {
+    "north_america": 1.0,
+    "europe": 1.2,
+    "south_america": 1.5,
+    "asia": 1.8,
+    "africa": 2.0,
+    "oceania": 1.6,
+    "antarctica": 2.0
+  },
+
+  "shipping_methods": {
+    "domestic_standard":      5.00,
+    "domestic_express":       10.00,
+    "international_standard": 15.00,
+    "international_priority": 25.00,
+    "international_express":  40.00
+  }
+}
