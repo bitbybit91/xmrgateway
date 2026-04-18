@@ -992,6 +992,146 @@ class _ProductParser(html.parser.HTMLParser):
                 self.quantity = m.group(1)
 
 
+class IndexProductParser(html.parser.HTMLParser):
+    """Extracts product listings from an index/main page HTML.
+
+    Looks for elements whose ``class`` attribute contains common product-related
+    words ("product", "item", "listing").  Within each matched container the
+    parser collects:
+
+    * ``name``  — text of the first heading tag found
+    * ``price`` — first ``$XX.XX``-style price string found anywhere in the block
+    * ``description`` — first non-trivial ``<p>`` text found in the block
+    * ``images`` — ``src`` values of ``<img>`` tags
+    * ``link``   — first non-fragment ``<a href>`` value
+    * ``quantity`` — value after "qty / quantity / stock / available:" pattern
+    """
+
+    _PRODUCT_CONTAINER_TAGS = frozenset(["div", "article", "section", "li", "tr"])
+    _HEADING_TAGS = frozenset(["h1", "h2", "h3", "h4", "h5", "h6"])
+    _PRODUCT_CLASS_HINTS = ("product", "item", "listing")
+    # Void elements never fire handle_endtag so must not affect depth
+    _VOID_TAGS = frozenset([
+        "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
+        "meta", "param", "source", "track", "wbr",
+    ])
+
+    def __init__(self):
+        super(IndexProductParser, self).__init__()
+        self._depth = 0
+        self._product_start_depth = None
+        self._current = None
+        self.products = []
+        # Accumulates all stripped text tokens inside the current product block
+        self._all_text = []
+        # Tracks the depth at which the first heading inside a product opened
+        self._heading_depth = None
+        self._heading_buf = []
+
+    @staticmethod
+    def _has_product_class(attrs_dict):
+        cls = attrs_dict.get("class", "").lower()
+        return any(hint in cls for hint in IndexProductParser._PRODUCT_CLASS_HINTS)
+
+    def handle_starttag(self, tag, attrs):
+        attrs_dict = dict(attrs)
+
+        # Collect img/a attributes before (possibly) skipping depth update
+        if self._current is not None:
+            if tag == "img":
+                src = attrs_dict.get("src", "")
+                if src and not src.startswith("data:"):
+                    self._current["images"].append(src)
+            elif tag == "a":
+                href = attrs_dict.get("href", "")
+                if href and not any(
+                    href.startswith(p) for p in ("#", "javascript:", "mailto:")
+                ):
+                    if not self._current["link"]:
+                        self._current["link"] = href
+
+        # Void elements do not produce a matching endtag, so skip depth tracking
+        if tag in self._VOID_TAGS:
+            return
+
+        self._depth += 1
+
+        # Only start a new product container when we are not already inside one
+        if self._current is None and tag in self._PRODUCT_CONTAINER_TAGS:
+            if self._has_product_class(attrs_dict):
+                self._product_start_depth = self._depth
+                self._current = {
+                    "name": "",
+                    "price": "",
+                    "description": "",
+                    "images": [],
+                    "link": "",
+                    "quantity": "",
+                }
+                self._all_text = []
+
+        if self._current is not None:
+            # Begin collecting heading text (use depth to match the close tag)
+            if tag in self._HEADING_TAGS and self._heading_depth is None:
+                self._heading_depth = self._depth
+                self._heading_buf = []
+
+    def handle_endtag(self, tag):
+        if tag in self._VOID_TAGS:
+            return
+
+        if self._current is not None:
+            # Finalise heading text
+            if tag in self._HEADING_TAGS and self._heading_depth == self._depth:
+                heading_text = "".join(self._heading_buf).strip()
+                if heading_text and not self._current["name"]:
+                    self._current["name"] = heading_text
+                self._heading_depth = None
+                self._heading_buf = []
+
+            # Finalise product when closing its container tag
+            if (
+                self._depth == self._product_start_depth
+                and tag in self._PRODUCT_CONTAINER_TAGS
+            ):
+                all_text_str = " ".join(self._all_text)
+                if not self._current["price"]:
+                    m = re.search(r"\$\s*(\d+(?:\.\d{1,2})?)", all_text_str)
+                    if m:
+                        self._current["price"] = m.group(1)
+                if not self._current["description"]:
+                    desc = all_text_str.strip()
+                    if len(desc) > 15:
+                        self._current["description"] = desc[:200]
+                if self._current["name"] or self._current["price"]:
+                    self.products.append(self._current)
+                self._current = None
+                self._product_start_depth = None
+                self._all_text = []
+
+        self._depth -= 1
+
+    def handle_data(self, data):
+        stripped = data.strip()
+        if not stripped:
+            return
+        if self._current is not None:
+            self._all_text.append(stripped)
+            if not self._current["price"]:
+                m = re.search(r"\$\s*(\d+(?:\.\d{1,2})?)", data)
+                if m:
+                    self._current["price"] = m.group(1)
+            if not self._current["quantity"]:
+                m = re.search(
+                    r"(?:qty|quantity|stock|available)[:\s]+(\d+)",
+                    data, re.IGNORECASE,
+                )
+                if m:
+                    self._current["quantity"] = m.group(1)
+        if self._heading_depth is not None:
+            self._heading_buf.append(data)
+
+
 def _infer_category(name, content, filepath):
     """Infer product category from name, content, and file path."""
     text = (name + " " + content + " " + filepath).lower()
@@ -1054,9 +1194,96 @@ def is_product_file(filepath, root):
     return rel.endswith((".html", ".php"))
 
 
-# ---------------------------------------------------------------------------
-# HTML BUILDING HELPERS
-# ---------------------------------------------------------------------------
+def _product_path_from_name(root, name, hint_link):
+    """Derive a product file path from a product name and optional link hint.
+
+    If *hint_link* looks like a local HTML/PHP path it is used directly
+    (resolved relative to *root*).  Otherwise a URL-safe slug built from
+    *name* is placed in the ``products/`` subdirectory.
+    """
+    if hint_link:
+        link_clean = hint_link.split("?")[0].split("#")[0].lstrip("/")
+        if link_clean.endswith((".html", ".php")):
+            return os.path.normpath(os.path.join(root, link_clean))
+    slug = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-") or "product"
+    return os.path.join(root, "products", slug + ".html")
+
+
+def parse_products_from_index(website_root, logger):
+    """Parse products directly from ``index.html`` or ``index.php``.
+
+    Uses :class:`IndexProductParser` to find product containers in the index
+    page.  Returns a list of product dicts (same structure as
+    :func:`parse_product`) or an empty list when no products are found.
+    This is the preferred product-discovery method; file-based scanning via
+    :func:`is_product_file` is only used as a fallback.
+    """
+    index_path = None
+    for fname in ("index.html", "index.php"):
+        candidate = os.path.join(website_root, fname)
+        if os.path.exists(candidate):
+            index_path = candidate
+            break
+
+    if not index_path:
+        logger.log("No index page found; skipping index product parsing")
+        return []
+
+    content = read_file_safe(index_path)
+    if not content:
+        return []
+
+    parser = IndexProductParser()
+    try:
+        parser.feed(content)
+    except Exception:
+        pass
+
+    products = []
+    seen_names = set()
+    for raw in parser.products:
+        name = raw["name"].strip() or "Product"
+        if name in seen_names:
+            continue
+        seen_names.add(name)
+
+        price = raw["price"] or "0"
+        description = raw["description"] or ""
+        images = raw["images"]
+        link = raw["link"]
+        quantity = raw["quantity"] or "1"
+
+        # Prefer an existing linked file, otherwise derive a path
+        if link:
+            linked_path = _resolve_link(index_path, link, website_root)
+            if linked_path and os.path.exists(linked_path):
+                filepath = linked_path
+            else:
+                filepath = _product_path_from_name(website_root, name, link)
+        else:
+            filepath = _product_path_from_name(website_root, name, None)
+
+        products.append({
+            "name": name,
+            "price": price,
+            "description": description,
+            "images": images,
+            "filepath": filepath,
+            "quantity": quantity,
+            "category": _infer_category(name, description, ""),
+        })
+
+    if products:
+        logger.log(
+            "Parsed {} product(s) from index page ({})".format(
+                len(products), os.path.basename(index_path)
+            )
+        )
+    else:
+        logger.log("No product listings found in index page")
+    return products
+
+
 
 def _rel_root(root, current_file):
     """Return the relative path prefix from current_file's directory to root."""
@@ -1715,6 +1942,50 @@ def enhance_product_page(filepath, product, root, all_categories, config,
     return False
 
 
+def _create_product_page_if_needed(product, root, all_categories, config,
+                                   logger, dry_run=False):
+    """Create a basic HTML product page for a product that has no existing file.
+
+    This is used for products discovered via :func:`parse_products_from_index`
+    that are not yet backed by an individual product page.  The generated page
+    is intentionally minimal so that :func:`enhance_product_page` can enrich it
+    with pricing controls in the normal pipeline flow.
+    """
+    filepath = product["filepath"]
+    if os.path.exists(filepath):
+        return
+
+    name = html.escape(product.get("name", "Product"))
+    price = product.get("price", "0")
+    description = html.escape(product.get("description", ""))
+
+    if product.get("images"):
+        img_html = (
+            '<img class="product-image" src="{}" alt="{}" loading="lazy"'
+            ' style="max-width:100%;border-radius:var(--radius)">'.format(
+                html.escape(product["images"][0]), name
+            )
+        )
+    else:
+        img_html = ""
+
+    body = (
+        '<div class="page-hero">\n'
+        "  <h1>{name}</h1>\n"
+        "</div>\n"
+        '<div class="card" style="margin-bottom:1.5rem">\n'
+        "  {img}\n"
+        '  <p class="product-price" style="font-size:1.4rem;'
+        'color:var(--accent);font-weight:700;margin:1rem 0">${price}</p>\n'
+        "  <p>{desc}</p>\n"
+        "</div>"
+    ).format(name=name, price=price, img=img_html, desc=description)
+
+    page = build_page_shell(name, body, root, filepath, all_categories, config)
+    logger.log("Created product page: {}".format(os.path.relpath(filepath, root)))
+    write_file_safe(filepath, page, dry_run)
+
+
 # ---------------------------------------------------------------------------
 # CSS / JS INJECTION INTO EXISTING PAGES
 # ---------------------------------------------------------------------------
@@ -1892,12 +2163,27 @@ def main():
 
     # ── Step 8: Parse products & categorise ─────────────────────────────────
     logger.log("─── Step 8: Parsing products and categorising ───")
-    products = [
-        parse_product(fp)
-        for fp in files["html"] + files["php"]
-        if is_product_file(fp, website_root)
-    ]
-    logger.log("Found {} product page(s)".format(len(products)))
+
+    # Primary: try to extract products from the index page
+    products = parse_products_from_index(website_root, logger)
+
+    if products:
+        logger.log(
+            "Using {} product(s) parsed from index page (primary source)".format(
+                len(products)
+            )
+        )
+    else:
+        # Fallback: discover individual product files
+        logger.log(
+            "No index products found; falling back to file-based product discovery"
+        )
+        products = [
+            parse_product(fp)
+            for fp in files["html"] + files["php"]
+            if is_product_file(fp, website_root)
+        ]
+        logger.log("Found {} product page(s) via file scan".format(len(products)))
 
     categories = collections.OrderedDict()
     for product in products:
@@ -1910,6 +2196,12 @@ def main():
             ", ".join(all_category_names) if all_category_names else "none"
         )
     )
+
+    # Create individual product pages for index-parsed products that have no file
+    for product in products:
+        _create_product_page_if_needed(
+            product, website_root, all_category_names, config, logger, dry_run
+        )
 
     # ── Step 9: Enhance product pages ───────────────────────────────────────
     logger.log("─── Step 9: Enhancing product pages with pricing controls ───")
