@@ -37,6 +37,7 @@ import os
 import re
 import shutil
 import sys
+from urllib.parse import quote as url_quote
 
 try:
     from bs4 import BeautifulSoup, NavigableString, Tag
@@ -84,6 +85,11 @@ _MIN_DESCRIPTION_LEN = 20
 
 # Maximum number of characters to retain for a product description snippet.
 _MAX_DESCRIPTION_LEN = 200
+
+# Maximum character length of a quantity option string.  Strings longer than
+# this are assumed to be descriptive paragraphs rather than tier labels
+# (e.g. "100-piece bulk pack" is fine; a full product paragraph is not).
+_MAX_QTY_TEXT_LEN = 80
 
 # ---------------------------------------------------------------------------
 # REGEX PATTERNS
@@ -355,14 +361,15 @@ def _find_product_name_in_container(form, container):
         headings_in_container = container.find_all(heading_tags)
 
     # --- Pass 2: keep only headings that come BEFORE the form.
-    # A heading H comes before the form F when F is NOT found anywhere inside H
-    # *and* H is not reachable by traversing forward from F.
-    # The simplest, parser-independent test: try find_next() from H — if the
-    # form is reachable by forward traversal from H, H precedes the form.
+    # A heading H comes before the form F in the tree when the form is
+    # reachable by forward traversal starting from H.  Using
+    # `h.find_next(lambda tag: tag is form)` is efficient because it stops
+    # as soon as it encounters the form (unlike `form in h.find_all_next(True)`
+    # which materialises the entire subsequent tree).
     best_heading = None
     for h in headings_in_container:
         # h precedes form when the form appears somewhere after h in the tree
-        if h.find_next(True) is not None and form in h.find_all_next(True):
+        if h.find_next(lambda tag: tag is form):  # noqa: B023
             best_heading = h  # iterate all; last winner is closest-before-form
 
     if best_heading:
@@ -479,7 +486,7 @@ def _extract_from_text_patterns(container):
             qty = m.group(1).strip()
             price = m.group(2).strip()
             # Only include if the quantity part doesn't look like a label
-            if qty.lower() not in _TABLE_HEADER_WORDS and len(qty) < 60:
+            if qty.lower() not in _TABLE_HEADER_WORDS and len(qty) <= _MAX_QTY_TEXT_LEN:
                 quantities.append(qty)
                 prices.append(price)
 
@@ -740,10 +747,15 @@ def process_index(index_path, dry_run=False):
             img = container.find("img")
             if img:
                 image_src = img.get("src", "")
-            # Use the first paragraph or non-heading text block as description
+            # Use the first paragraph or non-heading, non-form text block as
+            # description.  Skip any tag that is itself a <form> or that is
+            # nested inside a <form> (e.g. labels, button text) to avoid
+            # accidentally using form UI copy as the product description.
             for tag in container.find_all(["p", "div", "span"]):
+                if tag.name == "form" or tag.find_parent("form"):
+                    continue
                 text = tag.get_text(strip=True)
-                if text and len(text) > _MIN_DESCRIPTION_LEN and tag.name != "form":
+                if text and len(text) > _MIN_DESCRIPTION_LEN:
                     description = text[:_MAX_DESCRIPTION_LEN]
                     break
 
@@ -1032,9 +1044,12 @@ def generate_payment_php(products, config, dry_run=False):
     # backslashes, quotes, control characters and Unicode safely).
     wallet_js_literal = json.dumps(wallet)   # e.g. "\"abc...xyz\""
 
+    # Use url_quote (urllib.parse.quote) for proper percent-encoding of the
+    # wallet address in the QR code API URL — html_module.escape() is not
+    # appropriate for URL query parameters.
     qr_url = (
         "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={}".format(
-            html_module.escape(wallet)
+            url_quote(wallet, safe="")
         )
     )
 
@@ -1248,17 +1263,31 @@ def generate_payment_php(products, config, dry_run=False):
         "    history.replaceState(null, '', window.location.pathname);\n"
         "  }}\n"
         "\n"
+        "  // ---------- Price string to number helper ----------\n"
+        "  // Handles both decimal conventions:\n"
+        "  //   English:  '€1,234.56' (comma=thousands, dot=decimal)\n"
+        "  //   European: '€1.234,56' (dot=thousands,  comma=decimal)\n"
+        "  // Heuristic: if the string ends with a comma + 1-2 digits,\n"
+        "  // treat that comma as the decimal separator.\n"
+        "  function priceToNum(str) {{\n"
+        "    var s = ('' + str).replace(/[^0-9.,]/g, '');\n"
+        "    if (!s) return 0;\n"
+        "    if (/,\\d{{1,2}}$/.test(s)) {{\n"
+        "      s = s.replace(/\\./g, '').replace(',', '.');\n"
+        "    }} else {{\n"
+        "      s = s.replace(/,/g, '');\n"
+        "    }}\n"
+        "    return parseFloat(s) || 0;\n"
+        "  }}\n"
+        "\n"
         "  // ---------- Product card helpers ----------\n"
         "  function updateSubtotal(ci) {{\n"
         "    var qtySel   = document.getElementById('qty-'   + ci);\n"
         "    var priceSel = document.getElementById('price-' + ci);\n"
         "    var subEl    = document.getElementById('subtotal-' + ci);\n"
         "    if (!qtySel || !priceSel || !subEl) return;\n"
-        "    // Extract numeric price from the selected option text (strip currency)\n"
-        "    var rawPrice = priceSel.value.replace(/[^0-9.,]/g, '').replace(',', '.');\n"
-        "    var p = parseFloat(rawPrice) || 0;\n"
-        "    var rawQty = qtySel.value.replace(/[^0-9.,]/g, '').replace(',', '.');\n"
-        "    var q = parseFloat(rawQty) || 1;\n"
+        "    var p = priceToNum(priceSel.value);\n"
+        "    var q = priceToNum(qtySel.value) || 1;\n"
         "    subEl.textContent = '$' + (q * p).toFixed(2);\n"
         "  }}\n"
         "\n"
@@ -1283,9 +1312,7 @@ def generate_payment_php(products, config, dry_run=False):
         "    var sSel = document.getElementById('shipping-sel');\n"
         "    var mult = cSel ? (CONTINENTS[cSel.value] || 1.0) : 1.0;\n"
         "    var ship = sSel ? (SHIPPING[sSel.value]   || 0)   : 0;\n"
-        "    // Extract numeric value from price string (strip currency symbols)\n"
-        "    var rawP = ('' + _orderPrice).replace(/[^0-9.,]/g, '').replace(',', '.');\n"
-        "    var numP = parseFloat(rawP) || 0;\n"
+        "    var numP = priceToNum(_orderPrice);\n"
         "    var total = (numP * mult * _orderQty) + ship;\n"
         "    var el = document.getElementById('order-total');\n"
         "    if (el) el.textContent = '$' + total.toFixed(2);\n"
