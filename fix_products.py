@@ -340,6 +340,18 @@ def _find_product_container(form):
     return form.parent
 
 
+def _heading_precedes_form(heading, form):
+    """
+    Return True when *heading* appears before *form* in document order.
+
+    Uses `find_next()` with an identity check so traversal stops the moment
+    the form element is found — this is more efficient than materialising the
+    full `find_all_next()` list and avoids capturing the loop variable inside
+    a lambda (the helper function makes the intent explicit).
+    """
+    return bool(heading.find_next(lambda tag: tag is form))
+
+
 def _find_product_name_in_container(form, container):
     """
     Find the most relevant product name (heading text) near *form* inside
@@ -347,9 +359,8 @@ def _find_product_name_in_container(form, container):
     Returns an empty string if nothing suitable is found.
 
     Uses BeautifulSoup's find_all() with recursive traversal to collect
-    headings in DOM order, then checks whether each heading is an ancestor
-    of the form or appears before it by walking the tree with .find_next()
-    — no string-serialisation comparison is needed.
+    headings in DOM order, then uses _heading_precedes_form() to identify
+    the closest heading that precedes the form — no string-serialisation.
     """
     heading_tags = ["h1", "h2", "h3", "h4", "h5", "h6"]
     heading_tag_set = set(heading_tags)
@@ -361,15 +372,9 @@ def _find_product_name_in_container(form, container):
         headings_in_container = container.find_all(heading_tags)
 
     # --- Pass 2: keep only headings that come BEFORE the form.
-    # A heading H comes before the form F in the tree when the form is
-    # reachable by forward traversal starting from H.  Using
-    # `h.find_next(lambda tag: tag is form)` is efficient because it stops
-    # as soon as it encounters the form (unlike `form in h.find_all_next(True)`
-    # which materialises the entire subsequent tree).
     best_heading = None
     for h in headings_in_container:
-        # h precedes form when the form appears somewhere after h in the tree
-        if h.find_next(lambda tag: tag is form):  # noqa: B023
+        if _heading_precedes_form(h, form):
             best_heading = h  # iterate all; last winner is closest-before-form
 
     if best_heading:
@@ -1353,10 +1358,12 @@ def generate_payment_php(products, config, dry_run=False):
         "    }});\n"
         "\n"
         "  // ---------- Copy wallet address ----------\n"
+        "  // wallet_addr is serialised by Python's json.dumps() so it is a\n"
+        "  // properly escaped JavaScript string literal (safe against injection).\n"
         "  function copyWallet() {{\n"
-        # wallet_js_literal is a json.dumps()-produced JS string (already
-        # includes its surrounding double-quote characters) so it is safe
-        # to embed directly as the right-hand side of a var assignment.
+        # wallet_js_literal is produced by json.dumps(wallet) in Python which
+        # handles all special characters (backslashes, quotes, Unicode, control
+        # codes) so it is safe to interpolate directly as a JS string literal.
         "    var addr = {wallet_js_literal};\n"
         "    if (navigator.clipboard) {{\n"
         "      navigator.clipboard.writeText(addr).then(function(){{\n"
