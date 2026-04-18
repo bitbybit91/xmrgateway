@@ -1015,6 +1015,10 @@ class IndexProductParser(html.parser.HTMLParser):
         "area", "base", "br", "col", "embed", "hr", "img", "input", "link",
         "meta", "param", "source", "track", "wbr",
     ])
+    _PRICE_RE = re.compile(r"\$\s*(\d+(?:\.\d{1,2})?)")
+    _QUANTITY_RE = re.compile(
+        r"(?:qty|quantity|stock|available)[:\s]+(\d+)", re.IGNORECASE
+    )
 
     def __init__(self):
         super(IndexProductParser, self).__init__()
@@ -1096,7 +1100,7 @@ class IndexProductParser(html.parser.HTMLParser):
             ):
                 all_text_str = " ".join(self._all_text)
                 if not self._current["price"]:
-                    m = re.search(r"\$\s*(\d+(?:\.\d{1,2})?)", all_text_str)
+                    m = self._PRICE_RE.search(all_text_str)
                     if m:
                         self._current["price"] = m.group(1)
                 if not self._current["description"]:
@@ -1118,14 +1122,11 @@ class IndexProductParser(html.parser.HTMLParser):
         if self._current is not None:
             self._all_text.append(stripped)
             if not self._current["price"]:
-                m = re.search(r"\$\s*(\d+(?:\.\d{1,2})?)", data)
+                m = self._PRICE_RE.search(data)
                 if m:
                     self._current["price"] = m.group(1)
             if not self._current["quantity"]:
-                m = re.search(
-                    r"(?:qty|quantity|stock|available)[:\s]+(\d+)",
-                    data, re.IGNORECASE,
-                )
+                m = self._QUANTITY_RE.search(data)
                 if m:
                     self._current["quantity"] = m.group(1)
         if self._heading_depth is not None:
@@ -1236,8 +1237,12 @@ def parse_products_from_index(website_root, logger):
     parser = IndexProductParser()
     try:
         parser.feed(content)
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.log(
+            "Warning: error while parsing index page {}: {}".format(
+                os.path.basename(index_path), exc
+            )
+        )
 
     products = []
     seen_names = set()
