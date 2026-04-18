@@ -75,6 +75,17 @@ DEFAULT_CONFIG = {
 }
 
 # ---------------------------------------------------------------------------
+# MODULE-LEVEL CONSTANTS (magic numbers extracted for maintainability)
+# ---------------------------------------------------------------------------
+
+# Minimum number of characters for a text block to qualify as a product
+# description (shorter strings are likely nav labels or single words).
+_MIN_DESCRIPTION_LEN = 20
+
+# Maximum number of characters to retain for a product description snippet.
+_MAX_DESCRIPTION_LEN = 200
+
+# ---------------------------------------------------------------------------
 # REGEX PATTERNS
 # ---------------------------------------------------------------------------
 
@@ -328,36 +339,39 @@ def _find_product_name_in_container(form, container):
     Find the most relevant product name (heading text) near *form* inside
     *container*.  Prefers headings that precede the form in document order.
     Returns an empty string if nothing suitable is found.
+
+    Uses BeautifulSoup's find_all() with recursive traversal to collect
+    headings in DOM order, then checks whether each heading is an ancestor
+    of the form or appears before it by walking the tree with .find_next()
+    — no string-serialisation comparison is needed.
     """
     heading_tags = ["h1", "h2", "h3", "h4", "h5", "h6"]
+    heading_tag_set = set(heading_tags)
 
-    # Collect all headings in the container, in document order
+    # --- Pass 1: collect all headings inside the container, in DOM order.
+    # BeautifulSoup's find_all() yields elements in document (source) order.
     headings_in_container = []
     if container:
-        for tag_name in heading_tags:
-            for h in container.find_all(tag_name):
-                headings_in_container.append(h)
+        headings_in_container = container.find_all(heading_tags)
 
-    # Among those, prefer the one that appears BEFORE the form in the tree
-    # We use the string representation position as a proxy for document order.
-    form_pos = str(form)
-    container_str = str(container) if container else ""
-
+    # --- Pass 2: keep only headings that come BEFORE the form.
+    # A heading H comes before the form F when F is NOT found anywhere inside H
+    # *and* H is not reachable by traversing forward from F.
+    # The simplest, parser-independent test: try find_next() from H — if the
+    # form is reachable by forward traversal from H, H precedes the form.
     best_heading = None
     for h in headings_in_container:
-        h_str = str(h)
-        # Heading must appear before the form in the container string
-        h_pos = container_str.find(h_str)
-        f_pos = container_str.find(form_pos)
-        if h_pos != -1 and f_pos != -1 and h_pos < f_pos:
-            best_heading = h  # last one before the form wins (closest)
+        # h precedes form when the form appears somewhere after h in the tree
+        if h.find_next(True) is not None and form in h.find_all_next(True):
+            best_heading = h  # iterate all; last winner is closest-before-form
 
     if best_heading:
         text = best_heading.get_text(strip=True)
         if text:
             return text
 
-    # If nothing was found before the form, take any heading in the container
+    # --- Fallback: if no heading was found strictly before the form, take any
+    # heading in the container (e.g. the form is the very first child).
     for tag_name in heading_tags:
         h = container.find(tag_name) if container else None
         if h:
@@ -365,15 +379,15 @@ def _find_product_name_in_container(form, container):
             if text:
                 return text
 
-    # Last resort: walk backwards through preceding siblings/ancestors
+    # --- Last resort: walk backward through preceding siblings and ancestors
     for sibling in form.find_previous_siblings():
         if not isinstance(sibling, Tag):
             continue
-        if sibling.name in heading_tags:
+        if sibling.name in heading_tag_set:
             text = sibling.get_text(strip=True)
             if text:
                 return text
-        # Look inside sibling for a heading
+        # Look inside the sibling for a heading
         for tag_name in heading_tags:
             h = sibling.find(tag_name)
             if h:
@@ -685,7 +699,9 @@ def process_index(index_path, dry_run=False):
     if not content:
         return content, []
 
-    # Use html.parser (stdlib) so we have zero extra dependencies beyond bs4
+    # Use html.parser (stdlib) as the underlying parser for BeautifulSoup.
+    # This avoids requiring lxml or html5lib; only beautifulsoup4 needs to be
+    # pip-installed (as documented in the script's header).
     soup = BeautifulSoup(content, "html.parser")
 
     # Find every form whose action attribute is "payment.php" (case-insensitive,
@@ -727,8 +743,8 @@ def process_index(index_path, dry_run=False):
             # Use the first paragraph or non-heading text block as description
             for tag in container.find_all(["p", "div", "span"]):
                 text = tag.get_text(strip=True)
-                if text and len(text) > 20 and tag.name != "form":
-                    description = text[:200]
+                if text and len(text) > _MIN_DESCRIPTION_LEN and tag.name != "form":
+                    description = text[:_MAX_DESCRIPTION_LEN]
                     break
 
         products.append(
@@ -877,6 +893,125 @@ def _product_card_html(product, card_index):
     return card
 
 
+def _payment_page_css():
+    """
+    Return the inline CSS for the self-contained payment.php page.
+
+    Extracted into its own function to keep generate_payment_php() readable.
+    The CSS uses CSS custom properties (variables) for the dark-theme colour
+    palette so colours can be adjusted in one place.
+
+    Section breakdown:
+      • CSS variables (root)  — colour palette, spacing, shadows
+      • Reset / base          — box-sizing, body, links, headings
+      • Layout                — .container, header
+      • Product grid          — .products-grid, .product-card, .card-*
+      • Buttons               — .btn-order, .btn-back
+      • Checkout view         — #checkout-view, .step, table, form controls
+      • Crypto / wallet       — .price-grid, .wallet-box, .copy-btn
+      • Status / contact      — .status-box, .contact-cards, @keyframes pulse
+    """
+    return (
+        # --- CSS variables (dark theme colour palette) ---
+        "    :root{"
+        "--bg:#0d0d0d;--bg2:#1a1a1a;--bg3:#222;--border:#333;"
+        "--text:#e8e8e8;--muted:#a0a0a0;--accent:#ff6b35;--accent2:#ff8855;"
+        "--radius:8px;--shadow:0 4px 20px rgba(0,0,0,.5);}\n"
+        # --- Reset / base ---
+        "    *{box-sizing:border-box;margin:0;padding:0;}\n"
+        "    body{background:var(--bg);color:var(--text);"
+        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
+        "line-height:1.6;}\n"
+        "    a{color:var(--accent);text-decoration:none;}\n"
+        "    a:hover{color:var(--accent2);text-decoration:underline;}\n"
+        "    h1,h2,h3{color:var(--text);font-weight:600;line-height:1.3;"
+        "margin-bottom:.6em;}\n"
+        "    p{color:var(--muted);margin-bottom:.8em;}\n"
+        # --- Layout ---
+        "    .container{max-width:1200px;margin:0 auto;padding:0 20px;}\n"
+        "    header{background:var(--bg2);border-bottom:1px solid var(--border);"
+        "padding:1rem 0;margin-bottom:2rem;}\n"
+        "    header h1{color:var(--accent);font-size:1.4rem;}\n"
+        # --- Product grid ---
+        "    .products-grid{display:grid;"
+        "grid-template-columns:repeat(auto-fill,minmax(260px,1fr));"
+        "gap:1.5rem;padding:1rem 0;}\n"
+        "    .product-card{background:var(--bg3);border:1px solid var(--border);"
+        "border-radius:var(--radius);overflow:hidden;display:flex;"
+        "flex-direction:column;transition:border .2s,transform .2s,box-shadow .2s;}\n"
+        "    .product-card:hover{border-color:var(--accent);"
+        "transform:translateY(-3px);box-shadow:var(--shadow);}\n"
+        "    .product-img{width:100%;aspect-ratio:4/3;object-fit:cover;"
+        "background:var(--bg2);}\n"
+        "    .card-body{padding:1rem;display:flex;flex-direction:column;flex:1;}\n"
+        "    .card-title{font-size:1rem;font-weight:600;color:var(--text);"
+        "margin-bottom:.4rem;}\n"
+        "    .card-desc{font-size:.85rem;color:var(--muted);flex:1;"
+        "margin-bottom:.8rem;}\n"
+        "    .card-price{font-size:1.1rem;font-weight:700;color:var(--accent);"
+        "margin-bottom:.6rem;}\n"
+        "    .card-controls{display:flex;gap:.5rem;flex-wrap:wrap;"
+        "margin-bottom:.6rem;align-items:center;}\n"
+        "    .card-controls label{font-size:.8rem;color:var(--muted);}\n"
+        "    .card-controls select{background:var(--bg2);border:1px solid var(--border);"
+        "color:var(--text);padding:4px 8px;border-radius:4px;font-size:.85rem;}\n"
+        "    .card-subtotal{font-size:.9rem;color:var(--muted);margin-bottom:.8rem;}\n"
+        # --- Buttons ---
+        "    .btn-order{display:block;text-align:center;background:var(--accent);"
+        "color:#fff;padding:10px;border-radius:4px;font-weight:600;font-size:.9rem;"
+        "border:none;cursor:pointer;transition:background .2s,transform .2s;}\n"
+        "    .btn-order:hover{background:var(--accent2);transform:translateY(-1px);}\n"
+        "    .btn-back{background:var(--bg2);color:var(--text);"
+        "border:1px solid var(--border);padding:10px 20px;"
+        "border-radius:4px;cursor:pointer;font-size:.9rem;"
+        "margin-bottom:1rem;transition:background .2s;}\n"
+        "    .btn-back:hover{background:var(--bg3);}\n"
+        # --- Checkout view ---
+        "    #checkout-view{display:none;}\n"
+        "    .step{background:var(--bg3);border:1px solid var(--border);"
+        "border-radius:var(--radius);padding:1.5rem;margin-bottom:1.5rem;}\n"
+        "    table{width:100%;border-collapse:collapse;margin-bottom:1rem;}\n"
+        "    th,td{padding:10px 14px;text-align:left;"
+        "border-bottom:1px solid var(--border);font-size:.9rem;}\n"
+        "    th{background:var(--bg2);color:var(--muted);font-weight:600;"
+        "text-transform:uppercase;font-size:.75rem;}\n"
+        "    select,input{width:100%;background:var(--bg2);"
+        "border:1px solid var(--border);color:var(--text);padding:10px 14px;"
+        "border-radius:4px;font-size:.95rem;outline:none;}\n"
+        "    select:focus,input:focus{border-color:var(--accent);}\n"
+        "    .form-group{margin-bottom:1rem;}\n"
+        "    label{display:block;margin-bottom:5px;font-size:.9rem;"
+        "color:var(--muted);}\n"
+        "    .total-box{padding:1rem;background:var(--bg2);"
+        "border-radius:4px;margin-top:.5rem;}\n"
+        "    .accent{color:var(--accent);}\n"
+        # --- Crypto / wallet ---
+        "    .price-grid{display:grid;"
+        "grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;}\n"
+        "    .price-box{background:var(--bg2);padding:1rem;"
+        "border-radius:4px;text-align:center;}\n"
+        "    .price-box .currency{font-size:.8rem;color:var(--muted);"
+        "margin-bottom:.3rem;}\n"
+        "    .price-box .amount{font-size:1.4rem;font-weight:700;"
+        "color:var(--accent);}\n"
+        "    .wallet-box{background:var(--bg2);padding:1rem;"
+        "border-radius:4px;word-break:break-all;font-size:.85rem;"
+        "color:var(--text);margin-bottom:1rem;}\n"
+        "    .copy-btn{margin-top:.5rem;background:var(--accent);color:#fff;"
+        "border:none;padding:6px 16px;border-radius:4px;cursor:pointer;"
+        "font-size:.85rem;}\n"
+        # --- Status / contact ---
+        "    .status-box{display:flex;align-items:center;gap:1rem;padding:1rem;"
+        "background:var(--bg2);border-radius:4px;}\n"
+        "    .status-dot{width:12px;height:12px;border-radius:50%;"
+        "background:#ff9800;flex-shrink:0;animation:pulse 2s infinite;}\n"
+        "    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}\n"
+        "    .contact-cards{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem;}\n"
+        "    .contact-card{background:var(--bg2);padding:1rem;"
+        "border-radius:4px;flex:1;min-width:160px;}\n"
+    )
+
+
 def generate_payment_php(products, config, dry_run=False):
     """
     Build and return the complete payment.php HTML/JS string.
@@ -893,7 +1028,9 @@ def generate_payment_php(products, config, dry_run=False):
     continent_js = json.dumps(config.get("continent_pricing", {}))
     shipping_js = json.dumps(config.get("shipping_methods", {}))
     wallet_esc = html_module.escape(wallet)
-    wallet_js = wallet.replace("\\", "\\\\").replace("'", "\\'")
+    # json.dumps produces a properly escaped JS string literal (handles
+    # backslashes, quotes, control characters and Unicode safely).
+    wallet_js_literal = json.dumps(wallet)   # e.g. "\"abc...xyz\""
 
     qr_url = (
         "https://api.qrserver.com/v1/create-qr-code/?size=200x200&data={}".format(
@@ -944,6 +1081,7 @@ def generate_payment_php(products, config, dry_run=False):
 
     continent_opts = _continent_options_html(config)
     shipping_opts = _shipping_options_html(config)
+    inline_css = _payment_page_css()
 
     page = (
         "<!DOCTYPE html>\n"
@@ -954,98 +1092,7 @@ def generate_payment_php(products, config, dry_run=False):
         '  <meta name="robots" content="noindex, nofollow">\n'
         "  <title>Shop &amp; Checkout</title>\n"
         "  <style>\n"
-        # Inline CSS so payment.php is fully self-contained
-        "    :root{{"
-        "--bg:#0d0d0d;--bg2:#1a1a1a;--bg3:#222;--border:#333;--border2:#444;"
-        "--text:#e8e8e8;--muted:#a0a0a0;--accent:#ff6b35;--accent2:#ff8855;"
-        "--radius:8px;--shadow:0 4px 20px rgba(0,0,0,.5);}}\n"
-        "    *{{box-sizing:border-box;margin:0;padding:0;}}\n"
-        "    body{{background:var(--bg);color:var(--text);"
-        "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;"
-        "line-height:1.6;}}\n"
-        "    a{{color:var(--accent);text-decoration:none;}}\n"
-        "    a:hover{{color:var(--accent2);text-decoration:underline;}}\n"
-        "    h1,h2,h3{{color:var(--text);font-weight:600;line-height:1.3;"
-        "margin-bottom:.6em;}}\n"
-        "    p{{color:var(--muted);margin-bottom:.8em;}}\n"
-        "    .container{{max-width:1200px;margin:0 auto;padding:0 20px;}}\n"
-        "    header{{background:var(--bg2);border-bottom:1px solid var(--border);"
-        "padding:1rem 0;margin-bottom:2rem;}}\n"
-        "    header h1{{color:var(--accent);font-size:1.4rem;}}\n"
-        "    /* Product grid */\n"
-        "    .products-grid{{display:grid;"
-        "grid-template-columns:repeat(auto-fill,minmax(260px,1fr));"
-        "gap:1.5rem;padding:1rem 0;}}\n"
-        "    .product-card{{background:var(--bg3);border:1px solid var(--border);"
-        "border-radius:var(--radius);overflow:hidden;display:flex;"
-        "flex-direction:column;transition:border .2s,transform .2s,box-shadow .2s;}}\n"
-        "    .product-card:hover{{border-color:var(--accent);"
-        "transform:translateY(-3px);box-shadow:var(--shadow);}}\n"
-        "    .product-img{{width:100%;aspect-ratio:4/3;object-fit:cover;"
-        "background:var(--bg2);}}\n"
-        "    .card-body{{padding:1rem;display:flex;flex-direction:column;flex:1;}}\n"
-        "    .card-title{{font-size:1rem;font-weight:600;color:var(--text);"
-        "margin-bottom:.4rem;}}\n"
-        "    .card-desc{{font-size:.85rem;color:var(--muted);flex:1;"
-        "margin-bottom:.8rem;}}\n"
-        "    .card-price{{font-size:1.1rem;font-weight:700;color:var(--accent);"
-        "margin-bottom:.6rem;}}\n"
-        "    .card-controls{{display:flex;gap:.5rem;flex-wrap:wrap;"
-        "margin-bottom:.6rem;align-items:center;}}\n"
-        "    .card-controls label{{font-size:.8rem;color:var(--muted);}}\n"
-        "    .card-controls select{{background:var(--bg2);border:1px solid var(--border);"
-        "color:var(--text);padding:4px 8px;border-radius:4px;font-size:.85rem;}}\n"
-        "    .card-subtotal{{font-size:.9rem;color:var(--muted);margin-bottom:.8rem;}}\n"
-        "    .btn-order{{display:block;text-align:center;background:var(--accent);"
-        "color:#fff;padding:10px;border-radius:4px;font-weight:600;font-size:.9rem;"
-        "border:none;cursor:pointer;transition:background .2s,transform .2s;}}\n"
-        "    .btn-order:hover{{background:var(--accent2);transform:translateY(-1px);}}\n"
-        "    /* Checkout view */\n"
-        "    #checkout-view{{display:none;}}\n"
-        "    .step{{background:var(--bg3);border:1px solid var(--border);"
-        "border-radius:var(--radius);padding:1.5rem;margin-bottom:1.5rem;}}\n"
-        "    table{{width:100%;border-collapse:collapse;margin-bottom:1rem;}}\n"
-        "    th,td{{padding:10px 14px;text-align:left;"
-        "border-bottom:1px solid var(--border);font-size:.9rem;}}\n"
-        "    th{{background:var(--bg2);color:var(--muted);font-weight:600;"
-        "text-transform:uppercase;font-size:.75rem;}}\n"
-        "    select,input{{width:100%;background:var(--bg2);"
-        "border:1px solid var(--border);color:var(--text);padding:10px 14px;"
-        "border-radius:4px;font-size:.95rem;outline:none;}}\n"
-        "    select:focus,input:focus{{border-color:var(--accent);}}\n"
-        "    .form-group{{margin-bottom:1rem;}}\n"
-        "    label{{display:block;margin-bottom:5px;font-size:.9rem;"
-        "color:var(--muted);}}\n"
-        "    .total-box{{padding:1rem;background:var(--bg2);"
-        "border-radius:4px;margin-top:.5rem;}}\n"
-        "    .accent{{color:var(--accent);}}\n"
-        "    .price-grid{{display:grid;"
-        "grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:1rem;}}\n"
-        "    .price-box{{background:var(--bg2);padding:1rem;"
-        "border-radius:4px;text-align:center;}}\n"
-        "    .price-box .currency{{font-size:.8rem;color:var(--muted);"
-        "margin-bottom:.3rem;}}\n"
-        "    .price-box .amount{{font-size:1.4rem;font-weight:700;"
-        "color:var(--accent);}}\n"
-        "    .wallet-box{{background:var(--bg2);padding:1rem;"
-        "border-radius:4px;word-break:break-all;font-size:.85rem;"
-        "color:var(--text);margin-bottom:1rem;position:relative;}}\n"
-        "    .copy-btn{{margin-top:.5rem;background:var(--accent);color:#fff;"
-        "border:none;padding:6px 16px;border-radius:4px;cursor:pointer;"
-        "font-size:.85rem;}}\n"
-        "    .status-box{{display:flex;align-items:center;gap:1rem;padding:1rem;"
-        "background:var(--bg2);border-radius:4px;}}\n"
-        "    .status-dot{{width:12px;height:12px;border-radius:50%;"
-        "background:#ff9800;flex-shrink:0;animation:pulse 2s infinite;}}\n"
-        "    @keyframes pulse{{0%,100%{{opacity:1}}50%{{opacity:.4}}}}\n"
-        "    .contact-cards{{display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem;}}\n"
-        "    .contact-card{{background:var(--bg2);padding:1rem;"
-        "border-radius:4px;flex:1;min-width:160px;}}\n"
-        "    .btn-back{{background:var(--bg2);color:var(--text);"
-        "border:1px solid var(--border);padding:10px 20px;"
-        "border-radius:4px;cursor:pointer;font-size:.9rem;"
-        "margin-bottom:1rem;transition:background .2s;}}\n"
-        "    .btn-back:hover{{background:var(--bg3);}}\n"
+        "{css}"
         "  </style>\n"
         "</head>\n"
         "<body>\n"
@@ -1280,7 +1327,10 @@ def generate_payment_php(products, config, dry_run=False):
         "\n"
         "  // ---------- Copy wallet address ----------\n"
         "  function copyWallet() {{\n"
-        "    var addr = '{wallet_js}';\n"
+        # wallet_js_literal is a json.dumps()-produced JS string (already
+        # includes its surrounding double-quote characters) so it is safe
+        # to embed directly as the right-hand side of a var assignment.
+        "    var addr = {wallet_js_literal};\n"
         "    if (navigator.clipboard) {{\n"
         "      navigator.clipboard.writeText(addr).then(function(){{\n"
         "        var btn = document.querySelector('.copy-btn');\n"
@@ -1319,11 +1369,12 @@ def generate_payment_php(products, config, dry_run=False):
         "</html>"
     ).format(
         cards=cards_html,
+        css=inline_css,
         continent_opts=continent_opts,
         shipping_opts=shipping_opts,
         qr=qr_url,
         wallet_esc=wallet_esc,
-        wallet_js=wallet_js,
+        wallet_js_literal=wallet_js_literal,
         wickr_card=wickr_card,
         email_card=email_card,
         products_json=products_json,
