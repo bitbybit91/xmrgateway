@@ -399,13 +399,54 @@ footer a:hover { color: var(--accent); }
   50%       { opacity: 0.4; }
 }
 
+/* ── Payment Products Grid ── */
+.products-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 1.5rem; padding: 1rem 0;
+}
+.products-grid .product-card .qty-row {
+  display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.75rem;
+}
+.products-grid .product-card .qty-row label {
+  font-size: 0.85rem; margin: 0; white-space: nowrap; flex-shrink: 0;
+}
+.products-grid .product-card .qty-row input {
+  width: 70px; padding: 6px 10px; font-size: 0.9rem;
+}
+.products-grid .product-card .subtotal {
+  font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 0.75rem;
+}
+.checkout-breakdown {
+  background: var(--bg-secondary); border-radius: var(--radius-sm);
+  padding: 1rem; margin: 1rem 0;
+}
+.checkout-breakdown .line {
+  display: flex; justify-content: space-between;
+  padding: 4px 0; font-size: 0.9rem; color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+.checkout-breakdown .line:last-child { border-bottom: none; }
+.checkout-breakdown .line.total {
+  font-weight: 700; font-size: 1.1rem;
+  color: var(--accent); padding-top: 8px;
+}
+.btn-back {
+  display: inline-block; margin-bottom: 1.5rem;
+  padding: 8px 16px; border-radius: var(--radius-sm);
+  background: var(--bg-secondary); color: var(--text-primary);
+  border: 1px solid var(--border); cursor: pointer;
+  font-size: 0.9rem; transition: var(--transition);
+}
+.btn-back:hover { background: var(--bg-hover); text-decoration: none; }
+
 /* ── Responsive ── */
 @media (max-width: 768px) {
   .navbar .container {
     flex-wrap: wrap; height: auto; padding: 10px 20px; gap: 8px;
   }
   .navbar-nav { width: 100%; }
-  .product-grid {
+  .product-grid, .products-grid {
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1rem;
   }
   .page-hero h1 { font-size: 1.5rem; }
@@ -413,7 +454,7 @@ footer a:hover { color: var(--accent); }
   .sort-controls select { width: 100%; }
 }
 @media (max-width: 480px) {
-  .product-grid { grid-template-columns: 1fr; }
+  .product-grid, .products-grid { grid-template-columns: 1fr; }
   .category-grid { grid-template-columns: repeat(2, 1fr); }
 }
 """
@@ -992,6 +1033,358 @@ class _ProductParser(html.parser.HTMLParser):
                 self.quantity = m.group(1)
 
 
+_VOID_ELEMENTS = frozenset([
+    'area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input',
+    'link', 'meta', 'param', 'source', 'track', 'wbr',
+])
+_BLOCK_TAGS = frozenset(['div', 'li', 'article', 'section', 'tr'])
+_BLOCK_RE = re.compile(r'product|item|listing|card|goods|merch', re.IGNORECASE)
+
+
+class FormProductParser(html.parser.HTMLParser):
+    """Extracts real products from index.html/index.php by parsing form and
+    product-container block structures, with a regex fallback.
+
+    Attributes:
+        form_products  -- list of product dicts found in <form> elements
+        block_products -- list of product dicts found in block containers
+    """
+
+    _NAME_FIELDS = frozenset([
+        'item', 'product', 'product_name', 'product-name', 'name',
+        'item_name', 'item-name', 'title',
+    ])
+    _PRICE_FIELDS = frozenset([
+        'price', 'cost', 'amount_usd', 'product_price', 'product-price',
+        'item_price', 'item-price', 'unit_price',
+    ])
+    _QTY_FIELDS = frozenset(['qty', 'quantity', 'amount', 'count', 'num'])
+    _ID_FIELDS = frozenset(['id', 'product_id', 'product-id', 'item_id', 'item-id', 'pid'])
+    _PRICE_RE = re.compile(r'\$\s*(\d+(?:\.\d{1,2})?)')
+    _HEADING_TAGS = frozenset(['h1', 'h2', 'h3', 'h4', 'h5', 'h6'])
+
+    def __init__(self):
+        super(FormProductParser, self).__init__()
+        self.form_products = []
+        self.block_products = []
+
+        # Stack of open non-void tags (tag names only) for depth tracking.
+        self._tag_stack = []
+
+        # ── Form state ──────────────────────────────────────────────────────
+        self._cur_form = None   # dict accumulating the current form's data
+        self._cur_select = None  # name attr of the currently-open <select>
+
+        # ── Block state ─────────────────────────────────────────────────────
+        # Each entry: {'depth': int, 'data': {name, price, qty, images, description}}
+        self._blk_stack = []
+
+        # ── Text collection ─────────────────────────────────────────────────
+        # Stack of {'tag': str, 'depth': int, 'buf': list}
+        self._txt_stack = []
+
+    # ── Context helpers ──────────────────────────────────────────────────────
+
+    def _in_form(self):
+        return self._cur_form is not None
+
+    def _cur_depth(self):
+        return len(self._tag_stack)
+
+    def _push_price(self, price):
+        if self._cur_form is not None and not self._cur_form['price']:
+            self._cur_form['price'] = price
+        if self._blk_stack and not self._blk_stack[-1]['data']['price']:
+            self._blk_stack[-1]['data']['price'] = price
+
+    def _push_name(self, name):
+        if self._cur_form is not None and not self._cur_form['name']:
+            self._cur_form['name'] = name
+        if self._blk_stack and not self._blk_stack[-1]['data']['name']:
+            self._blk_stack[-1]['data']['name'] = name
+
+    def _push_desc(self, desc):
+        if self._cur_form is not None and not self._cur_form['description']:
+            self._cur_form['description'] = desc
+        if self._blk_stack and not self._blk_stack[-1]['data']['description']:
+            self._blk_stack[-1]['data']['description'] = desc
+
+    def _push_image(self, src):
+        if self._cur_form is not None:
+            self._cur_form['images'].append(src)
+        for entry in self._blk_stack:
+            entry['data']['images'].append(src)
+
+    # ── HTML parser callbacks ────────────────────────────────────────────────
+
+    def handle_starttag(self, tag, attrs):
+        tag = tag.lower()
+        attrs_d = dict(attrs)
+
+        # Push to tag stack (void elements have no matching end tag)
+        if tag not in _VOID_ELEMENTS:
+            self._tag_stack.append(tag)
+        depth = len(self._tag_stack)
+
+        # ── Form element handling ─────────────────────────────────────────
+        if tag == 'form':
+            self._cur_form = {
+                'name': '', 'price': '', 'qty': '', 'product_id': '',
+                'images': [], 'description': '',
+            }
+            self._cur_select = None
+
+        elif tag == 'input' and self._in_form():
+            itype = attrs_d.get('type', 'text').lower()
+            iname = attrs_d.get('name', '').lower().strip()
+            ival = attrs_d.get('value', '').strip()
+            if itype in ('hidden', 'text'):
+                if iname in self._NAME_FIELDS and ival and not self._cur_form['name']:
+                    self._cur_form['name'] = ival
+                elif iname in self._PRICE_FIELDS and ival and not self._cur_form['price']:
+                    self._cur_form['price'] = ival
+                elif iname in self._QTY_FIELDS and ival and not self._cur_form['qty']:
+                    self._cur_form['qty'] = ival
+                elif iname in self._ID_FIELDS and ival and not self._cur_form['product_id']:
+                    self._cur_form['product_id'] = ival
+            elif itype == 'submit' and ival and not self._cur_form['name']:
+                self._cur_form['name'] = ival
+
+        elif tag == 'select' and self._in_form():
+            self._cur_select = attrs_d.get('name', '').lower().strip()
+
+        elif tag == 'option' and self._in_form() and self._cur_select:
+            ival = attrs_d.get('value', '').strip()
+            if ival:
+                sel = self._cur_select
+                if sel in self._PRICE_FIELDS and not self._cur_form['price']:
+                    self._cur_form['price'] = ival
+                elif sel in self._NAME_FIELDS and not self._cur_form['name']:
+                    self._cur_form['name'] = ival
+
+        elif tag == 'img':
+            src = attrs_d.get('src', '').strip()
+            if src and not src.startswith('data:'):
+                self._push_image(src)
+
+        # ── Block container detection ─────────────────────────────────────
+        if tag in _BLOCK_TAGS:
+            cls = attrs_d.get('class', '') or ''
+            bid = attrs_d.get('id', '') or ''
+            if _BLOCK_RE.search(cls) or _BLOCK_RE.search(bid):
+                self._blk_stack.append({
+                    'depth': depth,
+                    'data': {
+                        'name': '', 'price': '', 'qty': '',
+                        'images': [], 'description': '',
+                    },
+                })
+
+        # ── Open text collector for text-bearing tags ─────────────────────
+        if tag in self._HEADING_TAGS or tag == 'p':
+            self._txt_stack.append({'tag': tag, 'depth': depth, 'buf': []})
+
+    def handle_endtag(self, tag):
+        tag = tag.lower()
+
+        # Current depth before popping
+        closing_depth = len(self._tag_stack)
+
+        # ── Collect buffered text if the matching collector is on top ─────
+        text = ''
+        if self._txt_stack and self._txt_stack[-1]['tag'] == tag:
+            text = ''.join(self._txt_stack.pop()['buf']).strip()
+
+        if text:
+            if tag in self._HEADING_TAGS:
+                self._push_name(text)
+            elif tag == 'p':
+                m = self._PRICE_RE.search(text)
+                if m:
+                    self._push_price(m.group(1))
+                elif len(text) > 10:
+                    self._push_desc(text)
+
+        # ── Finalise form ─────────────────────────────────────────────────
+        if tag == 'form' and self._in_form():
+            f = self._cur_form
+            self._cur_form = None
+            self._cur_select = None
+            if f['name'] or f['price']:
+                self.form_products.append({
+                    'name': f['name'] or 'Product',
+                    'price': f['price'] or '0',
+                    'description': f['description'],
+                    'images': list(f['images']),
+                    'quantity': f['qty'] or '1',
+                    'product_id': f['product_id'],
+                    'link': '',
+                    'source': 'form',
+                })
+
+        # ── Finalise block containers at this depth ───────────────────────
+        if tag in _BLOCK_TAGS:
+            remaining = []
+            for entry in self._blk_stack:
+                if entry['depth'] == closing_depth:
+                    d = entry['data']
+                    if not d['price']:
+                        m = self._PRICE_RE.search(d['description'])
+                        if m:
+                            d['price'] = m.group(1)
+                    if d['name'] and d['price']:
+                        self.block_products.append({
+                            'name': d['name'],
+                            'price': d['price'],
+                            'description': d['description'],
+                            'images': list(d['images']),
+                            'quantity': d.get('qty') or '1',
+                            'product_id': '',
+                            'link': '',
+                            'source': 'block',
+                        })
+                else:
+                    remaining.append(entry)
+            self._blk_stack = remaining
+
+        # ── Pop from tag stack ────────────────────────────────────────────
+        if tag not in _VOID_ELEMENTS:
+            if self._tag_stack and self._tag_stack[-1] == tag:
+                self._tag_stack.pop()
+            else:
+                for i in range(len(self._tag_stack) - 1, -1, -1):
+                    if self._tag_stack[i] == tag:
+                        self._tag_stack.pop(i)
+                        break
+
+    def handle_data(self, data):
+        # Propagate raw text to every open text collector (handles nested tags)
+        for entry in self._txt_stack:
+            entry['buf'].append(data)
+
+        # Also scan inline data for prices so spans/tds are covered
+        m = self._PRICE_RE.search(data)
+        if m:
+            self._push_price(m.group(1))
+
+
+def _fallback_regex_products(content):
+    """Regex fallback: scan all lines for $XX.XX patterns and look nearby for names/images."""
+    products = []
+    price_re = re.compile(r'\$\s*(\d+(?:\.\d{1,2})?)')
+    heading_re = re.compile(r'<h[1-6][^>]*>(.*?)</h[1-6]>', re.DOTALL | re.IGNORECASE)
+    bold_re = re.compile(r'<(?:b|strong)[^>]*>(.*?)</(?:b|strong)>', re.DOTALL | re.IGNORECASE)
+    img_re = re.compile(r'<img[^>]+src\s*=\s*["\']([^"\']*)["\']', re.IGNORECASE)
+    tag_re = re.compile(r'<[^>]+>')
+
+    lines = content.splitlines()
+    seen = set()
+    for i, line in enumerate(lines):
+        m = price_re.search(line)
+        if not m:
+            continue
+        price = m.group(1)
+        start = max(0, i - 10)
+        context = '\n'.join(lines[start:i + 3])
+
+        name = ''
+        for hm in heading_re.finditer(context):
+            txt = tag_re.sub('', hm.group(1)).strip()
+            if txt:
+                name = txt
+                break
+        if not name:
+            for bm in bold_re.finditer(context):
+                txt = tag_re.sub('', bm.group(1)).strip()
+                if txt:
+                    name = txt
+                    break
+
+        images = [
+            im.group(1) for im in img_re.finditer(context)
+            if im.group(1) and not im.group(1).startswith('data:')
+        ]
+
+        key = (name.lower(), price)
+        if key not in seen:
+            seen.add(key)
+            products.append({
+                'name': name or 'Product',
+                'price': price,
+                'description': '',
+                'images': images,
+                'quantity': '1',
+                'product_id': '',
+                'link': '',
+                'source': 'regex',
+            })
+    return products
+
+
+def extract_products(filepath):
+    """Extract products from an index.html / index.php file.
+
+    Priority: form products > block products > regex fallback.
+    When both form and block products are found the block products are used
+    to enrich the form products with images and descriptions.
+
+    Returns a list of product dicts with keys:
+        name, price, description, images, quantity, link, product_id, source
+    """
+    content = read_file_safe(filepath)
+    if not content:
+        return []
+
+    parser = FormProductParser()
+    try:
+        parser.feed(content)
+    except Exception:
+        pass
+
+    if parser.form_products and parser.block_products:
+        products = list(parser.form_products)
+        for fp in products:
+            for bp in parser.block_products:
+                name_match = fp['name'].lower() == bp['name'].lower()
+                price_match = fp['price'] and fp['price'] == bp['price']
+                # Require both name and price to match to avoid false merges
+                if name_match and price_match:
+                    if not fp['images']:
+                        fp['images'] = list(bp['images'])
+                    if not fp['description']:
+                        fp['description'] = bp['description']
+                    break
+                # Fall back: name-only match is sufficient for enrichment
+                elif name_match:
+                    if not fp['images']:
+                        fp['images'] = list(bp['images'])
+                    if not fp['description']:
+                        fp['description'] = bp['description']
+                    break
+    elif parser.form_products:
+        products = list(parser.form_products)
+    elif parser.block_products:
+        products = list(parser.block_products)
+    else:
+        products = _fallback_regex_products(content)
+
+    # Deduplicate by (name.lower(), price)
+    seen = set()
+    unique = []
+    for p in products:
+        key = (p['name'].lower(), p['price'])
+        if key not in seen:
+            seen.add(key)
+            p.setdefault('link', '')
+            p.setdefault('source', 'unknown')
+            p.setdefault('product_id', '')
+            p.setdefault('description', '')
+            p.setdefault('images', [])
+            p.setdefault('quantity', '1')
+            unique.append(p)
+    return unique
+
+
 def _infer_category(name, content, filepath):
     """Infer product category from name, content, and file path."""
     text = (name + " " + content + " " + filepath).lower()
@@ -1206,8 +1599,15 @@ def build_pricing_controls(config):
 # PAYMENT PAGE
 # ---------------------------------------------------------------------------
 
-def generate_payment_page(root, config, categories, logger, dry_run=False):
-    """Generate a modern client-side payment.php page."""
+def generate_payment_page(root, config, categories, logger, dry_run=False,
+                          products=None):
+    """Generate a modern client-side payment.php page with product cards.
+
+    If *products* is supplied each product gets its own card in a CSS grid.
+    Clicking "Order Now" on a card switches to the single-product checkout
+    panel.  Navigating to payment.php?item=X&price=Y&amount=Z skips straight
+    to checkout (backward-compatible URL-param behaviour is preserved).
+    """
     wallet = config.get("monero_wallet_address", "")
     wickr = html.escape(config.get("contact_wickr", ""))
     email = html.escape(config.get("contact_email", ""))
@@ -1235,20 +1635,88 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
         if email else ""
     )
 
-    page = (
-        "<!DOCTYPE html>\n"
-        '<html lang="en">\n'
-        "<head>\n"
-        '  <meta charset="UTF-8">\n'
-        '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
-        '  <meta name="robots" content="noindex, nofollow">\n'
-        "  <title>Secure Checkout</title>\n"
-        '  <link rel="stylesheet" href="css/style.css">\n'
-        "</head>\n"
-        "<body>\n"
-        "{navbar}\n"
-        '<main class="container main-content">\n'
-        '<div class="payment-container">\n'
+    # ── Build product cards for the grid ────────────────────────────────────
+    product_cards_html = ""
+    products_json = "[]"
+    has_products = bool(products)
+
+    if has_products:
+        card_parts = []
+        prod_data = []
+        for idx, p in enumerate(products):
+            pname = html.escape(p.get("name", "Product"))
+            pprice = p.get("price", "0")
+            pdesc = html.escape(p.get("description", "")[:100])
+            pqty = p.get("quantity", "1")
+            pimg = p.get("images", [])
+            if pimg:
+                img_html = (
+                    '<img class="product-image" src="{}" alt="{}" loading="lazy">'.format(
+                        html.escape(pimg[0]), pname
+                    )
+                )
+            else:
+                img_html = (
+                    '<div class="product-image" style="display:flex;align-items:center;'
+                    'justify-content:center;color:var(--text-muted);font-size:3rem;">'
+                    '&#128230;</div>'
+                )
+            card_parts.append((
+                '<div class="product-card" data-price="{price}" data-name="{name}">\n'
+                "  {img}\n"
+                '  <div class="product-body">\n'
+                '    <div class="product-title">{name}</div>\n'
+                '    <div class="product-price" data-base-price="{price}">${price}</div>\n'
+                '    <div class="product-desc">{desc}</div>\n'
+                '    <div class="qty-row">\n'
+                '      <label for="qty-{idx}">Qty:</label>\n'
+                '      <input type="number" id="qty-{idx}" value="{default_qty}"'
+                ' min="1" max="999" onchange="recalcProduct({idx})">\n'
+                "    </div>\n"
+                '    <div class="subtotal" id="subtotal-{idx}">'
+                'Subtotal: ${price}</div>\n'
+                '    <button class="btn-buy" onclick="orderProduct({idx})">'
+                'Order Now &rarr;</button>\n'
+                "  </div>\n"
+                "</div>"
+            ).format(
+                idx=idx, name=pname, price=pprice,
+                desc=pdesc, img=img_html, default_qty=pqty,
+            ))
+            try:
+                price_f = float(pprice)
+            except (ValueError, TypeError):
+                price_f = 0.0
+            prod_data.append({
+                "name": p.get("name", "Product"),
+                "price": price_f,
+                "qty": pqty,
+            })
+        product_cards_html = "\n".join(card_parts)
+        products_json = json.dumps(prod_data)
+
+    # ── Assemble product grid section ────────────────────────────────────────
+    if has_products:
+        grid_section = (
+            '<div id="products-section">\n'
+            '  <div class="page-hero" style="padding-top:1.5rem">\n'
+            "    <h1>Our Products</h1>\n"
+            "    <p>Select a product and click Order Now to proceed to checkout.</p>\n"
+            "  </div>\n"
+            '  <div class="products-grid" id="product-grid">\n'
+            "    {cards}\n"
+            "  </div>\n"
+            "</div>\n"
+        ).format(cards=product_cards_html)
+        checkout_display = "display:none"
+    else:
+        grid_section = ""
+        checkout_display = "display:block"
+
+    # ── Assemble checkout section ────────────────────────────────────────────
+    checkout_section = (
+        '<div id="checkout-section" style="{checkout_display}">\n'
+        "  {back_btn}\n"
         '  <div class="page-hero" style="padding-top:1.5rem">\n'
         "    <h1>Secure Checkout</h1>\n"
         "    <p>Complete your order with anonymous cryptocurrency payment.</p>\n"
@@ -1257,12 +1725,14 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
         '  <div class="payment-step" id="order-summary">\n'
         "    <h2>Order Summary</h2>\n"
         "    <table>\n"
-        "      <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>\n"
+        "      <thead><tr>"
+        "<th>Product</th><th>Unit Price</th><th>Qty</th><th>Subtotal</th>"
+        "</tr></thead>\n"
         "      <tbody><tr>\n"
         '        <td id="display-item">&#8212;</td>\n'
-        '        <td id="display-qty">&#8212;</td>\n'
         '        <td id="display-price">&#8212;</td>\n'
-        '        <td id="display-total">&#8212;</td>\n'
+        '        <td id="display-qty">&#8212;</td>\n'
+        '        <td id="display-subtotal">&#8212;</td>\n'
         "      </tr></tbody>\n"
         "    </table>\n"
         "  </div>\n"
@@ -1271,21 +1741,25 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
         "    <h2>Shipping Region</h2>\n"
         '    <div class="form-group">\n'
         '      <label for="continent-select">Your Region</label>\n'
-        '      <select id="continent-select">\n'
+        '      <select id="continent-select" onchange="recalcCheckout()">\n'
         "        {co}"
         "      </select>\n"
         "    </div>\n"
         '    <div class="form-group">\n'
         '      <label for="shipping-select">Shipping Method</label>\n'
-        '      <select id="shipping-select">\n'
+        '      <select id="shipping-select" onchange="recalcCheckout()">\n'
         "        {so}"
         "      </select>\n"
         "    </div>\n"
-        '    <div style="margin-top:1rem;padding:1rem;'
-        'background:var(--bg-secondary);border-radius:var(--radius-sm)">\n'
-        "      <strong>Order Total: </strong>\n"
-        '      <span id="order-total" style="color:var(--accent);font-size:1.2rem;'
-        'font-weight:700">&#8212;</span>\n'
+        '    <div class="checkout-breakdown">\n'
+        '      <div class="line"><span>Subtotal</span>'
+        '<span id="co-subtotal">&#8212;</span></div>\n'
+        '      <div class="line"><span>Region multiplier</span>'
+        '<span id="co-region">&times;1.00</span></div>\n'
+        '      <div class="line"><span>Shipping</span>'
+        '<span id="co-shipping">&#8212;</span></div>\n'
+        '      <div class="line total"><span>Order Total</span>'
+        '<span id="order-total">&#8212;</span></div>\n'
         "    </div>\n"
         "  </div>\n"
         "\n"
@@ -1309,7 +1783,7 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
         "\n"
         '  <div class="payment-step">\n'
         "    <h2>Pay with Monero (XMR)</h2>\n"
-        "    <p style=\"margin-bottom:1rem;font-size:0.9rem;\">Send the exact XMR amount "
+        '    <p style="margin-bottom:1rem;font-size:0.9rem;">Send the exact XMR amount '
         "shown above to the address below.</p>\n"
         '    <div style="text-align:center;margin-bottom:1rem;">\n'
         '      <img id="xmr-qr" src="{qr}" alt="Monero QR Code"\n'
@@ -1343,40 +1817,102 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
         "  </div>\n"
         "\n"
         "</div>\n"
+    ).format(
+        checkout_display=checkout_display,
+        back_btn=(
+            '<button class="btn-back" onclick="backToProducts()">'
+            '&larr; Back to Products</button>'
+            if has_products else ""
+        ),
+        co=_continent_options(config),
+        so=_shipping_options(config),
+        qr=qr_url,
+        wallet=html.escape(wallet),
+        wickr_card=wickr_card,
+        email_card=email_card,
+    )
+
+    page = (
+        "<!DOCTYPE html>\n"
+        '<html lang="en">\n'
+        "<head>\n"
+        '  <meta charset="UTF-8">\n'
+        '  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n'
+        '  <meta name="robots" content="noindex, nofollow">\n'
+        "  <title>Secure Checkout</title>\n"
+        '  <link rel="stylesheet" href="css/style.css">\n'
+        "</head>\n"
+        "<body>\n"
+        "{navbar}\n"
+        '<main class="container main-content">\n'
+        '<div class="payment-container">\n'
+        "{grid_section}"
+        "{checkout_section}"
+        "</div>\n"
         "</main>\n"
         "{footer}\n"
         "\n"
         "<script>\n"
         "var CONTINENTS = {continent_js};\n"
         "var SHIPPING   = {shipping_js};\n"
+        "var PRODUCTS   = {products_json};\n"
         "\n"
-        "(function () {{\n"
-        "  var p = new URLSearchParams(window.location.search);\n"
-        "  var item  = p.get('item')   || 'Order';\n"
-        "  var qty   = p.get('amount') || p.get('qty') || '1';\n"
-        "  var price = parseFloat(p.get('price') || '0');\n"
-        "  document.getElementById('display-item').textContent  = item;\n"
+        "/* ── Per-product helpers ── */\n"
+        "function recalcProduct(idx) {{\n"
+        "  var qEl = document.getElementById('qty-' + idx);\n"
+        "  var qty = parseInt(qEl ? qEl.value : 1, 10) || 1;\n"
+        "  var price = PRODUCTS[idx] ? PRODUCTS[idx].price : 0;\n"
+        "  var sub = (price * qty).toFixed(2);\n"
+        "  var el = document.getElementById('subtotal-' + idx);\n"
+        "  if (el) el.textContent = 'Subtotal: $' + sub;\n"
+        "}}\n"
+        "\n"
+        "function orderProduct(idx) {{\n"
+        "  var p = PRODUCTS[idx];\n"
+        "  if (!p) return;\n"
+        "  var qEl = document.getElementById('qty-' + idx);\n"
+        "  var qty = parseInt(qEl ? qEl.value : 1, 10) || 1;\n"
+        "  window._checkoutItem  = p.name;\n"
+        "  window._checkoutPrice = p.price;\n"
+        "  window._checkoutQty   = qty;\n"
+        "  document.getElementById('display-item').textContent  = p.name;\n"
+        "  document.getElementById('display-price').textContent = '$' + p.price.toFixed(2);\n"
         "  document.getElementById('display-qty').textContent   = qty;\n"
-        "  document.getElementById('display-price').textContent = '$' + price.toFixed(2);\n"
-        "  window._basePrice = price;\n"
-        "  window._baseQty   = parseInt(qty, 10) || 1;\n"
-        "  updateOrderTotal();\n"
-        "}})();\n"
+        "  document.getElementById('products-section').style.display = 'none';\n"
+        "  document.getElementById('checkout-section').style.display = 'block';\n"
+        "  recalcCheckout();\n"
+        "}}\n"
         "\n"
-        "function updateOrderTotal() {{\n"
+        "function backToProducts() {{\n"
+        "  document.getElementById('products-section').style.display = 'block';\n"
+        "  document.getElementById('checkout-section').style.display = 'none';\n"
+        "}}\n"
+        "\n"
+        "/* ── Checkout total calculation ── */\n"
+        "function recalcCheckout() {{\n"
         "  var cSel = document.getElementById('continent-select');\n"
         "  var sSel = document.getElementById('shipping-select');\n"
         "  var mult = cSel ? (CONTINENTS[cSel.value] || 1.0) : 1.0;\n"
         "  var ship = sSel ? (SHIPPING[sSel.value]   || 0)   : 0;\n"
-        "  var total = (window._basePrice * mult * window._baseQty) + ship;\n"
-        "  document.getElementById('display-total').textContent = '$' + total.toFixed(2);\n"
-        "  document.getElementById('order-total').textContent   = '$' + total.toFixed(2);\n"
+        "  var price = window._checkoutPrice || 0;\n"
+        "  var qty   = window._checkoutQty   || 1;\n"
+        "  var sub   = price * qty;\n"
+        "  var total = (sub * mult) + ship;\n"
+        "  var fmt = function (n) {{ return '$' + n.toFixed(2); }};\n"
+        "  var elSub  = document.getElementById('co-subtotal');\n"
+        "  var elReg  = document.getElementById('co-region');\n"
+        "  var elShip = document.getElementById('co-shipping');\n"
+        "  var elTot  = document.getElementById('order-total');\n"
+        "  var elDisp = document.getElementById('display-subtotal');\n"
+        "  if (elSub)  elSub.textContent  = fmt(sub);\n"
+        "  if (elReg)  elReg.textContent  = '\\u00d7' + mult.toFixed(2);\n"
+        "  if (elShip) elShip.textContent = fmt(ship);\n"
+        "  if (elTot)  elTot.textContent  = fmt(total);\n"
+        "  if (elDisp) elDisp.textContent = fmt(sub);\n"
         "  if (window._xmrPrice) updateCryptoAmounts(total);\n"
         "}}\n"
         "\n"
-        "document.getElementById('continent-select').addEventListener('change', updateOrderTotal);\n"
-        "document.getElementById('shipping-select').addEventListener('change', updateOrderTotal);\n"
-        "\n"
+        "/* ── Live crypto prices ── */\n"
         "function updateCryptoAmounts(usd) {{\n"
         "  if (!usd || !window._xmrPrice || !window._btcPrice) return;\n"
         "  document.getElementById('xmr-amount').textContent ="
@@ -1394,9 +1930,8 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
         "  .then(function (d) {{\n"
         "    window._xmrPrice = d.monero  ? d.monero.usd  : null;\n"
         "    window._btcPrice = d.bitcoin ? d.bitcoin.usd : null;\n"
-        "    var tot = parseFloat(\n"
-        "      (document.getElementById('order-total').textContent || '0').replace('$', '')\n"
-        "    ) || 0;\n"
+        "    var totEl = document.getElementById('order-total');\n"
+        "    var tot = totEl ? parseFloat((totEl.textContent || '0').replace('$', '')) : 0;\n"
         "    if (tot > 0) updateCryptoAmounts(tot);\n"
         "  }})\n"
         "  .catch(function () {{\n"
@@ -1404,13 +1939,14 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
         "    document.getElementById('btc-usd').textContent = '';\n"
         "  }});\n"
         "\n"
+        "/* ── Copy wallet address ── */\n"
         "function copyAddress() {{\n"
-        "  var addr = '{wallet_escaped}';\n"
+        "  var addr = {wallet_json};\n"
         "  if (navigator.clipboard) {{\n"
         "    navigator.clipboard.writeText(addr).then(function () {{\n"
         "      var btn = document.querySelector('.copy-btn');\n"
-        "      btn.textContent = 'Copied!';\n"
-        "      setTimeout(function () {{ btn.textContent = 'Copy'; }}, 2000);\n"
+        "      if (btn) {{ btn.textContent = 'Copied!';\n"
+        "        setTimeout(function () {{ btn.textContent = 'Copy'; }}, 2000); }}\n"
         "    }});\n"
         "  }} else {{\n"
         "    var ta = document.createElement('textarea');\n"
@@ -1419,25 +1955,45 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
         "    document.body.removeChild(ta);\n"
         "  }}\n"
         "}}\n"
+        "\n"
+        "/* ── URL param support — skip straight to checkout ── */\n"
+        "(function () {{\n"
+        "  var p = new URLSearchParams(window.location.search);\n"
+        "  var item  = p.get('item');\n"
+        "  var qty   = parseInt(p.get('amount') || p.get('qty') || '1', 10) || 1;\n"
+        "  var price = parseFloat(p.get('price') || '0');\n"
+        "  if (item || price) {{\n"
+        "    window._checkoutItem  = item || 'Order';\n"
+        "    window._checkoutPrice = price;\n"
+        "    window._checkoutQty   = qty;\n"
+        "    document.getElementById('display-item').textContent  = window._checkoutItem;\n"
+        "    document.getElementById('display-price').textContent = '$' + price.toFixed(2);\n"
+        "    document.getElementById('display-qty').textContent   = qty;\n"
+        "    var ps = document.getElementById('products-section');\n"
+        "    var cs = document.getElementById('checkout-section');\n"
+        "    if (ps) ps.style.display = 'none';\n"
+        "    if (cs) cs.style.display = 'block';\n"
+        "    recalcCheckout();\n"
+        "  }}\n"
+        "}})();\n"
         "</script>\n"
         "</body>\n"
         "</html>"
     ).format(
         navbar=navbar,
-        co=_continent_options(config),
-        so=_shipping_options(config),
-        qr=qr_url,
-        wallet=html.escape(wallet),
-        wallet_escaped=wallet.replace("'", "\\'"),
-        wickr_card=wickr_card,
-        email_card=email_card,
+        grid_section=grid_section,
+        checkout_section=checkout_section,
         footer=footer,
         continent_js=continent_js,
         shipping_js=shipping_js,
+        products_json=products_json,
+        wallet_json=json.dumps(wallet),
     )
 
     payment_path = os.path.join(root, "payment.php")
-    logger.log("Generated modern payment.php")
+    logger.log("Generated modern payment.php ({} products)".format(
+        len(products) if products else 0
+    ))
     write_file_safe(payment_path, page, dry_run)
 
 
@@ -1447,13 +2003,33 @@ def generate_payment_page(root, config, categories, logger, dry_run=False):
 
 def _product_card(product, root, ref_file):
     """Build a product card HTML snippet."""
-    rel_path = os.path.relpath(product["filepath"], os.path.dirname(ref_file)).replace(
-        os.sep, "/"
-    )
     price = product.get("price", "0")
     name = html.escape(product.get("name", "Product"))
     desc = html.escape(product.get("description", "")[:100])
     qty = product.get("quantity", "1")
+    name_enc = html.escape(product.get("name", "Product"), quote=True)
+
+    # Decide link target: use filepath only when it differs from the index file
+    fp = product.get("filepath", "")
+    fp_base = os.path.basename(fp).lower() if fp else ""
+    is_index = fp_base in ("index.html", "index.php", "")
+    if fp and not is_index:
+        rel_path = os.path.relpath(fp, os.path.dirname(ref_file)).replace(os.sep, "/")
+        view_btn = '<a href="{}" class="btn-buy" style="margin-bottom:0.4rem;display:block">View Product</a>\n'.format(
+            rel_path
+        )
+    else:
+        view_btn = ""
+
+    # Order Now button: onclick reads the adjacent qty input and updates the URL
+    order_btn = (
+        '<a href="payment.php?item={name}&price={price}&amount={qty}" '
+        'class="btn-buy" '
+        "onclick=\"var q=this.parentElement.querySelector('input[type=number]');"
+        "if(q){{this.href='payment.php?item={name}&price={price}&amount='+q.value;}}\">"
+        'Order Now &rarr;</a>'
+    ).format(name=name_enc, price=price, qty=qty)
+
     if product.get("images"):
         img = '<img class="product-image" src="{}" alt="{}" loading="lazy">'.format(
             html.escape(product["images"][0]), name
@@ -1461,7 +2037,7 @@ def _product_card(product, root, ref_file):
     else:
         img = (
             '<div class="product-image" style="display:flex;align-items:center;'
-            'justify-content:center;color:var(--text-muted);font-size:3rem;">\U0001f4e6</div>'
+            'justify-content:center;color:var(--text-muted);font-size:3rem;">&#128230;</div>'
         )
     return (
         '<div class="product-card" data-price="{price}" data-name="{name}" data-qty="{qty}">\n'
@@ -1470,10 +2046,18 @@ def _product_card(product, root, ref_file):
         '    <div class="product-title">{name}</div>\n'
         '    <div class="product-price" data-base-price="{price}">${price}</div>\n'
         '    <div class="product-desc">{desc}</div>\n'
-        '    <a href="{path}" class="btn-buy">View Product</a>\n'
+        '    <div class="qty-row">'
+        '<label>Qty:</label>'
+        '<input type="number" value="{qty}" min="1" max="999">'
+        '</div>\n'
+        "    {view_btn}"
+        "    {order_btn}\n"
         "  </div>\n"
         "</div>"
-    ).format(price=price, name=name, qty=qty, img=img, desc=desc, path=rel_path)
+    ).format(
+        price=price, name=name, qty=qty, img=img, desc=desc,
+        view_btn=view_btn, order_btn=order_btn,
+    )
 
 
 def generate_category_page(category, products, root, all_categories, config,
@@ -1892,12 +2476,40 @@ def main():
 
     # ── Step 8: Parse products & categorise ─────────────────────────────────
     logger.log("─── Step 8: Parsing products and categorising ───")
-    products = [
-        parse_product(fp)
-        for fp in files["html"] + files["php"]
-        if is_product_file(fp, website_root)
-    ]
-    logger.log("Found {} product page(s)".format(len(products)))
+
+    # First, try to extract real products from the index file
+    products = []
+    index_file = None
+    for idx_name in ("index.html", "index.php"):
+        candidate = os.path.join(website_root, idx_name)
+        if os.path.exists(candidate):
+            index_file = candidate
+            break
+
+    if index_file:
+        products = extract_products(index_file)
+        if products:
+            src = products[0].get("source", "unknown")
+            logger.log("Extracted {} product(s) from index file ({} source)".format(
+                len(products), src
+            ))
+            # Assign filepath and category to each index-extracted product
+            for p in products:
+                p.setdefault("filepath", index_file)
+                p["category"] = _infer_category(
+                    p.get("name", ""), p.get("description", ""), ""
+                )
+
+    # Fall back to file-based scanning if index extraction yielded nothing
+    if not products:
+        products = [
+            parse_product(fp)
+            for fp in files["html"] + files["php"]
+            if is_product_file(fp, website_root)
+        ]
+        logger.log("Found {} product page(s) from file scan".format(len(products)))
+
+    logger.log("Total products: {}".format(len(products)))
 
     categories = collections.OrderedDict()
     for product in products:
@@ -1913,11 +2525,14 @@ def main():
 
     # ── Step 9: Enhance product pages ───────────────────────────────────────
     logger.log("─── Step 9: Enhancing product pages with pricing controls ───")
+    _skip_enhance = {"index.html", "index.php", "payment.php", "payment.html"}
     for product in products:
-        enhance_product_page(
-            product["filepath"], product, website_root,
-            all_category_names, config, logger, dry_run,
-        )
+        fp = product.get("filepath", "")
+        if os.path.basename(fp).lower() not in _skip_enhance:
+            enhance_product_page(
+                fp, product, website_root,
+                all_category_names, config, logger, dry_run,
+            )
 
     # ── Step 10: Category pages ──────────────────────────────────────────────
     logger.log("─── Step 10: Generating category pages ───")
@@ -1935,7 +2550,10 @@ def main():
 
     # ── Step 12: Payment page ────────────────────────────────────────────────
     logger.log("─── Step 12: Generating payment page ───")
-    generate_payment_page(website_root, config, all_category_names, logger, dry_run)
+    generate_payment_page(
+        website_root, config, all_category_names, logger, dry_run,
+        products=products,
+    )
 
     # ── Step 13: Sitemap & robots ────────────────────────────────────────────
     logger.log("─── Step 13: Generating sitemap.xml and robots.txt ───")
