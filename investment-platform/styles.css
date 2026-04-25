@@ -1,0 +1,333 @@
+/* =============================================================================
+   investment-platform / styles.css
+   Overlay and display styles for the XMR payment system.
+   All selectors are namespaced with "xmr-" to avoid collisions with host pages.
+   ============================================================================= */
+
+/* --------------------------------------------------------------------------
+   CSS Custom Properties (theming)
+   -------------------------------------------------------------------------- */
+:root {
+  --xmr-primary:        #f26822;   /* Monero orange */
+  --xmr-primary-dark:   #c85410;
+  --xmr-surface:        #ffffff;
+  --xmr-surface-alt:    #f8f5f0;
+  --xmr-text:           #1a1a1a;
+  --xmr-text-muted:     #6b6b6b;
+  --xmr-border:         #e0d8d0;
+  --xmr-success:        #2e7d32;
+  --xmr-error:          #c62828;
+  --xmr-radius:         10px;
+  --xmr-shadow:         0 8px 40px rgba(0, 0, 0, 0.22);
+  --xmr-transition:     0.2s ease;
+  --xmr-font:           system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --xmr-mono:           "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+/* --------------------------------------------------------------------------
+   Backdrop
+   -------------------------------------------------------------------------- */
+#xmr-payment-overlay {
+  position:   fixed;
+  inset:      0;
+  z-index:    2147483647; /* max z-index */
+  display:    flex;
+  align-items: center;
+  justify-content: center;
+  padding:    16px;
+  font-family: var(--xmr-font);
+}
+
+.xmr-backdrop {
+  position:   absolute;
+  inset:      0;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  animation:  xmrFadeIn var(--xmr-transition) both;
+}
+
+/* --------------------------------------------------------------------------
+   Modal
+   -------------------------------------------------------------------------- */
+.xmr-modal {
+  position:        relative;
+  z-index:         1;
+  background:      var(--xmr-surface);
+  border-radius:   var(--xmr-radius);
+  box-shadow:      var(--xmr-shadow);
+  width:           100%;
+  max-width:       480px;
+  max-height:      92vh;
+  overflow-y:      auto;
+  display:         flex;
+  flex-direction:  column;
+  animation:       xmrSlideUp var(--xmr-transition) both;
+}
+
+.xmr-modal:focus {
+  outline: none;
+}
+
+/* --------------------------------------------------------------------------
+   Header
+   -------------------------------------------------------------------------- */
+.xmr-modal__header {
+  display:          flex;
+  align-items:      center;
+  justify-content:  space-between;
+  padding:          18px 20px 14px;
+  border-bottom:    1px solid var(--xmr-border);
+  background:       var(--xmr-primary);
+  border-radius:    var(--xmr-radius) var(--xmr-radius) 0 0;
+}
+
+.xmr-modal__title {
+  margin:       0;
+  font-size:    1.1rem;
+  font-weight:  700;
+  color:        #ffffff;
+  letter-spacing: 0.01em;
+}
+
+.xmr-modal__close {
+  background:   none;
+  border:       none;
+  cursor:       pointer;
+  color:        #ffffff;
+  font-size:    1.6rem;
+  line-height:  1;
+  padding:      0 4px;
+  opacity:      0.85;
+  transition:   opacity var(--xmr-transition);
+}
+
+.xmr-modal__close:hover,
+.xmr-modal__close:focus {
+  opacity: 1;
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Body
+   -------------------------------------------------------------------------- */
+.xmr-modal__body {
+  padding:  20px;
+  display:  flex;
+  flex-direction: column;
+  gap:      14px;
+}
+
+/* Tier badge */
+.xmr-tier-badge {
+  display:          inline-flex;
+  align-self:       flex-start;
+  background:       var(--xmr-primary);
+  color:            #ffffff;
+  font-size:        0.78rem;
+  font-weight:      600;
+  padding:          3px 12px;
+  border-radius:    20px;
+  letter-spacing:   0.04em;
+  text-transform:   uppercase;
+}
+
+/* Amount rows */
+.xmr-amount-row {
+  display:         flex;
+  align-items:     center;
+  gap:             10px;
+  padding:         12px 14px;
+  background:      var(--xmr-surface-alt);
+  border-radius:   var(--xmr-radius);
+  border:          1px solid var(--xmr-border);
+}
+
+.xmr-amount-row--xmr {
+  border-color:    var(--xmr-primary);
+  background:      #fff8f4;
+}
+
+.xmr-amount-row__label {
+  font-size:    0.82rem;
+  color:        var(--xmr-text-muted);
+  white-space:  nowrap;
+  min-width:    100px;
+}
+
+.xmr-amount-row__value {
+  flex:         1;
+  font-size:    1.05rem;
+  font-weight:  700;
+  color:        var(--xmr-text);
+  font-family:  var(--xmr-mono);
+  word-break:   break-all;
+}
+
+/* Exchange rate note */
+.xmr-rate-note {
+  margin:     0;
+  font-size:  0.8rem;
+  color:      var(--xmr-text-muted);
+  text-align: center;
+  padding:    0 4px;
+}
+
+/* --------------------------------------------------------------------------
+   XMR Address block
+   -------------------------------------------------------------------------- */
+.xmr-address-block {
+  display:        flex;
+  flex-direction: column;
+  gap:            6px;
+  padding:        12px 14px;
+  background:     var(--xmr-surface-alt);
+  border-radius:  var(--xmr-radius);
+  border:         1px solid var(--xmr-border);
+}
+
+.xmr-address-block__label {
+  font-size:    0.82rem;
+  font-weight:  600;
+  color:        var(--xmr-text-muted);
+}
+
+.xmr-address-block__input {
+  width:        100%;
+  font-family:  var(--xmr-mono);
+  font-size:    0.78rem;
+  color:        var(--xmr-text);
+  background:   var(--xmr-surface);
+  border:       1px solid var(--xmr-border);
+  border-radius: 6px;
+  padding:      6px 10px;
+  box-sizing:   border-box;
+  word-break:   break-all;
+}
+
+.xmr-address-block__input:focus {
+  outline:      2px solid var(--xmr-primary);
+  outline-offset: 1px;
+}
+
+/* --------------------------------------------------------------------------
+   Copy button
+   -------------------------------------------------------------------------- */
+.xmr-copy-btn {
+  background:     var(--xmr-primary);
+  color:          #ffffff;
+  border:         none;
+  border-radius:  6px;
+  cursor:         pointer;
+  font-size:      0.78rem;
+  font-weight:    600;
+  padding:        5px 12px;
+  white-space:    nowrap;
+  transition:     background var(--xmr-transition), opacity var(--xmr-transition);
+  flex-shrink:    0;
+}
+
+.xmr-copy-btn:hover:not(:disabled) {
+  background: var(--xmr-primary-dark);
+}
+
+.xmr-copy-btn:focus {
+  outline:       2px solid var(--xmr-primary-dark);
+  outline-offset: 2px;
+}
+
+.xmr-copy-btn:disabled {
+  opacity: 0.45;
+  cursor:  not-allowed;
+}
+
+.xmr-copy-btn--copied {
+  background: var(--xmr-success);
+}
+
+/* --------------------------------------------------------------------------
+   Footer
+   -------------------------------------------------------------------------- */
+.xmr-modal__footer {
+  padding:      12px 20px 16px;
+  border-top:   1px solid var(--xmr-border);
+  background:   var(--xmr-surface-alt);
+  border-radius: 0 0 var(--xmr-radius) var(--xmr-radius);
+}
+
+.xmr-modal__footnote {
+  margin:     0;
+  font-size:  0.76rem;
+  color:      var(--xmr-text-muted);
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* --------------------------------------------------------------------------
+   Animations
+   -------------------------------------------------------------------------- */
+@keyframes xmrFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes xmrSlideUp {
+  from { opacity: 0; transform: translateY(24px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0)    scale(1);    }
+}
+
+/* --------------------------------------------------------------------------
+   Reduced-motion override
+   -------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  .xmr-backdrop,
+  .xmr-modal {
+    animation: none;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Dark-mode override
+   -------------------------------------------------------------------------- */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --xmr-surface:      #1e1e1e;
+    --xmr-surface-alt:  #2a2a2a;
+    --xmr-text:         #ececec;
+    --xmr-text-muted:   #9e9e9e;
+    --xmr-border:       #3a3a3a;
+  }
+
+  .xmr-amount-row--xmr {
+    background: #2a1a10;
+  }
+
+  .xmr-address-block__input {
+    background: #141414;
+    color:      #ececec;
+  }
+}
+
+/* --------------------------------------------------------------------------
+   Mobile responsiveness
+   -------------------------------------------------------------------------- */
+@media (max-width: 520px) {
+  .xmr-modal__header {
+    padding: 14px 16px 12px;
+  }
+
+  .xmr-modal__body {
+    padding: 14px;
+    gap:     10px;
+  }
+
+  .xmr-amount-row {
+    flex-wrap: wrap;
+  }
+
+  .xmr-amount-row__label {
+    min-width: unset;
+    width:     100%;
+  }
+}

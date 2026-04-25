@@ -1,0 +1,22 @@
+{
+  "currency": "USD",
+  "tiers": [
+    { "name": "Starter",      "amount": 1000    },
+    { "name": "Basic",        "amount": 2500    },
+    { "name": "Standard",     "amount": 5000    },
+    { "name": "Advanced",     "amount": 10000   },
+    { "name": "Professional", "amount": 25000   },
+    { "name": "Enterprise",   "amount": 50000   },
+    { "name": "Premium",      "amount": 100000  },
+    { "name": "Elite",        "amount": 250000  },
+    { "name": "Ultimate",     "amount": 500000  },
+    { "name": "Platinum",     "amount": 1000000 }
+  ],
+  "defaultTierIndex": 0,
+  "xmrPriceApiUrl": "https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=usd",
+  "priceCacheDurationMs": 60000,
+  "overlayTitle": "Pay with Monero (XMR)",
+  "xmrPrecision": 6,
+  "buttonTextPattern": "(pay|invest|buy|checkout|subscribe|purchase|get\\s+started|deposit|fund|contribute)",
+  "buttonSelectorPattern": "(pay|invest|buy|checkout|cta|btn|button|action)"
+}
