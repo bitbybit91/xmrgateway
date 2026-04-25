@@ -3,7 +3,7 @@
 [![Documentation](https://docs.rs/acceptxmr/badge.svg)](https://docs.rs/acceptxmr)
 [![MSRV](https://img.shields.io/badge/MSRV-1.76.0-blue)](https://blog.rust-lang.org/2024/02/08/Rust-1.76.0.html)
 [![Docker Image Size](https://badgen.net/docker/size/busyboredom/acceptxmr/latest/amd64?icon=docker&label=Docker%20Size)](https://hub.docker.com/r/busyboredom/acceptxmr/)
-[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#license)
+[![License](https://img.shields.io/badge/license-MIT%20OR%20Apache--2.0-blue.svg)](#12-license)
 
 # AcceptXMR — Monero Payment Gateway
 
@@ -29,77 +29,91 @@
 ## 1. Project Overview
 
 `AcceptXMR` is a non-custodial Monero (XMR) payment processing system composed
-of two deliverables:
+of two main deliverables that share a single Rust workspace:
 
-- **`AcceptXMR` (library)** — A slim, composable Rust library for tracking
-  Monero payments in any Rust application. It generates subaddresses from your
-  private view key, polls a Monero daemon for incoming transactions, and notifies
-  your code via async subscribers or callbacks.
-- **`AcceptXMR-Server` (server)** — A batteries-included, standalone payment
+- **`acceptxmr` (library)** — A slim, composable Rust library for tracking
+  Monero payments inside any Rust application. It derives stealth subaddresses
+  from your private view key, polls a Monero daemon for matching transactions,
+  and notifies your code via async subscribers or HTTP callbacks.
+- **`acceptxmr-server` (server)** — A batteries-included, standalone payment
   gateway built on top of the library. It exposes two HTTP/WebSocket APIs (one
-  internal for your backend, one external for end users) and ships a ready-made
+  internal for your back-end, one external/user-facing) and ships a ready-made
   payment UI with Tera HTML templating.
+- **`configure_site.py`** — A single-file Python 3.7+ generator (stdlib only,
+  no internet required) that reads the `investment-platform/` source files and
+  writes a complete, upload-ready PHP website with zero JavaScript, handling all
+  XMR price conversion server-side.
 
 ### Key Features
 
-- **View-key-only operation** — no hot wallet, no private spend key ever leaves
-  your control.
+- **View-key-only operation** — no hot wallet; your private spend key never
+  leaves your control.
 - **Subaddress-based invoicing** — every invoice receives its own unique
-  subaddress.
-- **Persistent invoice storage** — survives process restarts; backends include
-  SQLite, Sled, and in-memory.
+  Monero subaddress.
+- **Persistent invoice storage** — SQLite, Sled, or in-memory backends;
+  survives process restarts.
 - **Configurable confirmations** — set required block confirmations per invoice.
-- **Timelock-aware** — ignores timelocked transactions.
-- **Burning-bug mitigation** — tracks used stealth addresses across all
-  historical and in-flight transactions.
+- **Burning-bug mitigation** — tracks used stealth-address output keys across
+  all historical and in-flight transactions.
 - **Multi-transaction payments** — a single invoice accepts funds spread across
-  multiple transactions.
-- **Real-time updates** — WebSocket push notifications to the payment UI.
+  multiple XMR transactions.
+- **Real-time WebSocket push** — live payment-status updates pushed to the
+  user's browser.
 - **Callback support** — HTTP callbacks fired on every invoice state change,
   with configurable retry logic.
-- **TLS + Bearer-token auth** — the internal API is secured out of the box.
+- **TLS + Bearer-token auth** — internal API is secured out of the box.
 - **Cross-platform Docker image** — pre-built for `linux/amd64` and
-  `linux/arm64`.
-- **OpenAPI / Swagger UI** — interactive API docs served at runtime.
+  `linux/arm64`; published to Docker Hub as `busyboredom/acceptxmr`.
+- **OpenAPI / Swagger UI** — interactive API docs served at runtime at
+  `<host>:<port>/swagger-ui/`.
+- **Zero-JavaScript PHP site generator** — `configure_site.py` produces a
+  fully PHP-driven investment-tier payment page with no client-side logic.
 
 ### Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
 | Language | Rust (edition 2021, MSRV 1.76) |
-| Async runtime | Tokio |
+| Async runtime | Tokio 1 |
 | HTTP server | Axum 0.7 |
 | HTTP client | Hyper 1 + hyper-rustls |
 | TLS | tokio-rustls / rustls |
-| Serialisation | serde / serde_json / serde_yaml |
-| Storage backends | SQLite (`sqlite` crate), Sled, in-memory |
-| Templating | Tera |
-| CLI arg parsing | Clap 4 |
-| Containerisation | Docker (multi-stage, multi-arch) |
+| Serialisation | serde / serde\_json / serde\_yaml |
+| Storage backends | SQLite (`sqlite` crate), Sled 0.34, in-memory |
+| HTML templating | Tera 1 |
+| CLI argument parsing | Clap 4 |
+| Containerisation | Docker (multi-stage, multi-arch build) |
 | CI/CD | GitHub Actions |
+| Site generator | Python 3.7+ (stdlib only) |
+| PHP site | PHP 7.4+ (generated; no framework) |
 
 ### Supported Platforms
 
 | Platform | Method |
 |----------|--------|
-| Linux (x86-64, arm64) | Native binary, Docker |
-| macOS (x86-64, Apple Silicon) | Native binary |
-| Windows (x86-64) | Native binary (Rust toolchain required) |
+| Linux x86-64 | Native binary, Docker |
+| Linux arm64 | Native binary, Docker |
+| macOS x86-64 / Apple Silicon | Native binary |
+| Windows x86-64 | Native binary (Rust toolchain required) |
 | Any OCI-compatible host | Docker image `busyboredom/acceptxmr` |
 
 ---
 
 ## 2. Prerequisites
 
-Every tool listed below must be present **before** following the Installation
-section. Install them in order.
+Install every tool listed below before proceeding to the Installation section.
+Follow the steps in the order shown.
+
+---
 
 ### 2.1 Git
 
-| Detail | Value |
-|--------|-------|
-| Minimum version | 2.x |
-| Download | https://git-scm.com/downloads |
+| | |
+|---|---|
+| Minimum version | 2.39 |
+| Download | <https://git-scm.com/downloads> |
+
+**Install**
 
 <details>
 <summary>macOS</summary>
@@ -107,68 +121,72 @@ section. Install them in order.
 ```bash
 brew install git
 ```
+
 </details>
 
 <details>
-<summary>Ubuntu / Debian</summary>
+<summary>Linux (Debian / Ubuntu)</summary>
 
 ```bash
 sudo apt update && sudo apt install -y git
 ```
+
 </details>
 
 <details>
 <summary>Windows</summary>
 
 ```powershell
-winget install Git.Git
+winget install --id Git.Git -e --source winget
 ```
+
 </details>
 
-Verify:
+**Verify**
 
 ```bash
 git --version
-# Expected: git version 2.x.x
+# Expected: git version 2.x.x or higher
 ```
 
 ---
 
-### 2.2 Rust Toolchain
+### 2.2 Rust Toolchain (rustup)
 
-| Detail | Value |
-|--------|-------|
-| Minimum version | 1.76.0 (MSRV) |
-| Recommended | latest stable |
-| Download | https://rustup.rs |
+The library and server are written in Rust. The minimum supported Rust version
+(MSRV) is **1.76.0**. The CI pipeline also tests against the current `nightly`
+toolchain.
 
-<details>
-<summary>macOS / Linux</summary>
+| | |
+|---|---|
+| Minimum version | 1.76.0 |
+| Download | <https://rustup.rs> |
+
+**Install (macOS / Linux)**
 
 ```bash
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# Reload your shell so that `cargo` is on $PATH
 source "$HOME/.cargo/env"
 ```
-</details>
 
-<details>
-<summary>Windows</summary>
+**Install (Windows)**
 
-Download and run `rustup-init.exe` from https://rustup.rs, then open a new
-terminal.
-</details>
+1. Download `rustup-init.exe` from <https://rustup.rs>.
+2. Run the installer and accept the default options.
+3. Open a new PowerShell window.
 
-Verify:
+**Verify**
 
 ```bash
 rustc --version
-# Expected: rustc 1.76.0 (or newer)
+# Expected: rustc 1.76.0 or higher
 cargo --version
-# Expected: cargo 1.76.0 (or newer)
+# Expected: cargo 1.76.0 or higher
 ```
 
-To install the nightly toolchain (required for `cargo fmt --all` with the
-project's formatting rules):
+**Install the nightly toolchain** (required for `cargo fmt --check` and
+`cargo clippy` with all features):
 
 ```bash
 rustup toolchain install nightly
@@ -177,532 +195,637 @@ rustup component add rustfmt clippy --toolchain nightly
 
 ---
 
-### 2.3 Docker (optional — required only for the Docker-based setup)
+### 2.3 Docker (optional — for container-based workflow)
 
-| Detail | Value |
-|--------|-------|
-| Minimum version | 24.x (Docker Engine) or Docker Desktop 4.x |
-| Download | https://docs.docker.com/get-docker/ |
+Required only if you intend to run or build the Docker image.
 
-<details>
-<summary>macOS</summary>
+| | |
+|---|---|
+| Minimum version | Docker Engine 24 / Docker Desktop 4.x |
+| Download | <https://docs.docker.com/get-docker/> |
+
+**Install (macOS)**
 
 ```bash
 brew install --cask docker
-# Then open the Docker Desktop application to complete installation.
+open -a Docker   # starts the Docker Desktop application
 ```
-</details>
 
-<details>
-<summary>Ubuntu / Debian</summary>
+**Install (Linux — Debian / Ubuntu)**
 
 ```bash
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker "$USER"
 newgrp docker
 ```
-</details>
 
-<details>
-<summary>Windows</summary>
+**Install (Windows)**
 
-Download Docker Desktop from https://docs.docker.com/desktop/install/windows-install/
-and follow the installer wizard.
-</details>
+Download and install [Docker Desktop for Windows](https://docs.docker.com/desktop/install/windows-install/).
 
-Verify:
+**Verify**
 
 ```bash
 docker --version
-# Expected: Docker version 24.x.x (or newer)
-docker compose version
-# Expected: Docker Compose version v2.x.x
+# Expected: Docker version 24.x.x or higher
+docker info
+# Expected: server info block with no errors
+```
+
+---
+
+### 2.4 Python 3.7+ (for `configure_site.py` only)
+
+Required only if you intend to run the PHP site generator.
+
+| | |
+|---|---|
+| Minimum version | 3.7 |
+| Download | <https://www.python.org/downloads/> |
+
+**Install (macOS)**
+
+```bash
+brew install python@3.11
+```
+
+**Install (Linux — Debian / Ubuntu)**
+
+```bash
+sudo apt update && sudo apt install -y python3
+```
+
+**Install (Windows)**
+
+```powershell
+winget install --id Python.Python.3.11 -e --source winget
+```
+
+**Verify**
+
+```bash
+python3 --version   # macOS / Linux
+python --version    # Windows
+# Expected: Python 3.7.x or higher
+```
+
+---
+
+### 2.5 A Monero Daemon (stagenet or mainnet)
+
+The gateway requires a running `monerod` instance to scan the blockchain.
+For local development you can use a public remote node (the default config
+points at `xmr-node.cakewallet.com:18081`) — no local installation needed.
+
+If you prefer a local stagenet node for fully offline development:
+
+| | |
+|---|---|
+| Download | <https://www.getmonero.org/downloads/> |
+
+```bash
+# Start a stagenet daemon (downloads ~5 GB of stagenet blockchain)
+monerod --stagenet --detach
 ```
 
 ---
 
 ## 3. Environment Setup (No Physical Device Required)
 
-`AcceptXMR-Server` communicates with a remote Monero daemon over HTTPS. No
-local Monero node is required; a public node is used by default. All
-development, testing, and CI steps run entirely in software.
+The entire project can be built, tested, and run on a single machine with no
+physical device. Three software-only methods are described below. Choose the
+one that best fits your workflow.
 
-### 3.1 Using a Public Monero Node (Default — Zero Setup)
+---
 
-The default configuration in `acceptxmr.yaml` already points at a public node:
+### Method A — Native Rust (fastest for development)
+
+This method runs the gateway directly on your host OS using the Rust toolchain
+installed in Section 2.2. No Docker, no VM required.
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/busyboredom/acceptxmr.git
+cd acceptxmr
+
+# 2. Install dependencies (downloaded automatically by cargo)
+cargo fetch
+
+# 3. Configure secrets (see Section 4)
+cp .env .env.local   # edit .env.local with real values
+```
+
+Expected output of `cargo fetch`:
 
 ```
-https://xmr-node.cakewallet.com:18081/
+Blocking waiting for file lock on package cache
+Downloading crates ...
+  Downloaded acceptxmr v0.14.0
+  ...
 ```
 
-No additional daemon setup is needed for development or testing.
+---
 
-### 3.2 Running a Local Monero Node via Docker (Optional)
+### Method B — Docker Compose (recommended for production-like testing)
 
-If you need an isolated, offline-friendly test environment, you can run
-[Monero's stagenet](https://monerodocs.org/infrastructure/stagenet/) inside a
-Docker container.
+Runs the server inside a container on your local machine. No Rust toolchain
+required on the host.
 
-1. Pull the official Monero image:
+```bash
+# 1. Clone the repository
+git clone https://github.com/busyboredom/acceptxmr.git
+cd acceptxmr
 
-   ```bash
-   docker pull sethsimmons/simple-monerod:latest
-   ```
+# 2. Create the database directory (Docker bind-mount target)
+mkdir -p AcceptXMR_DB
 
-2. Start a stagenet daemon:
+# 3. Copy and configure the example env file
+cp .env .env.local   # edit with real values
 
-   ```bash
-   docker run -d \
-     --name monerod-stagenet \
-     -p 38081:38081 \
-     sethsimmons/simple-monerod:latest \
-     --stagenet \
-     --rpc-bind-ip=0.0.0.0 \
-     --confirm-external-bind \
-     --rpc-bind-port=38081 \
-     --no-igd \
-     --hide-my-port
-   ```
+# 4. Start the stack
+docker compose up --build
+```
 
-3. Confirm the daemon is reachable:
+Expected output:
 
-   ```bash
-   curl -s http://127.0.0.1:38081/json_rpc \
-     -d '{"jsonrpc":"2.0","id":"0","method":"get_info"}' \
-     -H 'Content-Type: application/json' | python3 -m json.tool
-   ```
+```
+[+] Building 12.3s (18/18) FINISHED
+[+] Running 1/1
+ ✔ Container acceptxmr-server-1  Started
+acceptxmr-server-1  | [INFO  acceptxmr_server] Starting AcceptXMR-Server...
+acceptxmr-server-1  | [INFO  acceptxmr_server] External API listening on 127.0.0.1:8080
+acceptxmr-server-1  | [INFO  acceptxmr_server] Internal API listening on 127.0.0.1:8081
+```
 
-   Expected output contains `"status": "OK"`.
+The external payment UI is available at <http://127.0.0.1:8080/pay?id=>.
 
-4. Update `acceptxmr.yaml` to point at the local daemon:
+---
 
-   ```yaml
-   daemon:
-     url: http://127.0.0.1:38081/
-   ```
+### Method C — Pre-built Docker image (zero build time)
 
-### 3.3 Troubleshooting Common Setup Failures
+Pull the published image from Docker Hub and run it directly.
+
+```bash
+# 1. Pull the image
+docker pull busyboredom/acceptxmr:latest
+
+# 2. Create database and cert directories
+mkdir -p AcceptXMR_DB server/tests/testdata/cert
+
+# 3. Start the container
+docker run -d \
+  --name acceptxmr \
+  --network host \
+  --mount type=bind,source="$(pwd)/AcceptXMR_DB",target=/AcceptXMR_DB \
+  --mount type=bind,source="$(pwd)/server/tests/testdata/cert",target=/server/tests/testdata/cert \
+  --mount type=bind,source="$(pwd)/acceptxmr.yaml",target=/acceptxmr.yaml \
+  --env-file .env \
+  busyboredom/acceptxmr:latest
+```
+
+Expected output:
+
+```
+<container-id>
+```
+
+Confirm the container is running:
+
+```bash
+docker ps --filter name=acceptxmr
+```
+
+Expected output:
+
+```
+CONTAINER ID   IMAGE                          COMMAND                  CREATED        STATUS        PORTS     NAMES
+abc123def456   busyboredom/acceptxmr:latest   "./acceptxmr-server"     3 seconds ago  Up 2 seconds            acceptxmr
+```
+
+---
+
+### Troubleshooting the environment setup
 
 | Symptom | Cause | Fix |
 |---------|-------|-----|
-| `curl: (7) Failed to connect` | Daemon not yet started | Wait 30 s and retry; check `docker logs monerod-stagenet` |
-| `docker: command not found` | Docker not installed | Follow §2.3 |
-| `permission denied` running Docker | User not in `docker` group | `sudo usermod -aG docker "$USER" && newgrp docker` |
-| Daemon says `"busy"` | Initial sync still in progress | Wait for sync to complete or use the public node |
+| `cargo: command not found` | Rust not on `$PATH` | Run `source "$HOME/.cargo/env"` then open a new terminal |
+| `docker: command not found` | Docker not installed or not on `$PATH` | Re-run the Docker install steps in Section 2.3 |
+| `permission denied` when running Docker | User not in `docker` group | `sudo usermod -aG docker "$USER" && newgrp docker` |
+| Container exits immediately with exit code 1 | Missing `acceptxmr.yaml` or secrets | Ensure `acceptxmr.yaml` is present in the working directory and `.env` is set |
+| Port 8080 already in use | Another process is bound to the port | Change `external-api.port` in `acceptxmr.yaml` to an unused port (e.g. `9080`) |
 
 ---
 
 ## 4. Configuration
 
-`AcceptXMR-Server` uses **two** configuration sources:
+### 4.1 Primary configuration file — `acceptxmr.yaml`
 
-| Source | Purpose |
-|--------|---------|
-| `acceptxmr.yaml` | All non-secret settings |
-| Environment variables / `.env` file | Secrets (view key, API tokens, daemon password) |
+The server reads its configuration from `acceptxmr.yaml` in the working
+directory by default. An alternative path can be specified via:
 
-### 4.1 Environment Variables
+- CLI flag: `acceptxmr-server --config-file /path/to/file.yaml`
+- Environment variable: `CONFIG_FILE=/path/to/file.yaml`
 
-| Variable | Required | Type | Default | Description |
-|----------|----------|------|---------|-------------|
-| `PRIVATE_VIEWKEY` | **Yes** | hex string (64 chars) | — | Monero wallet private view key. Never commit this. |
-| `INTERNAL_API_TOKEN` | No | string | — | Bearer token to protect the internal API. Requires TLS to be configured. |
-| `EXTERNAL_API_TOKEN` | No | string | — | Bearer token to protect the external API. Requires TLS to be configured. |
-| `DAEMON_PASSWORD` | No | string | — | Password for Monero daemon RPC authentication (when `daemon.login` is set in YAML). |
-| `CONFIG_FILE` | No | filesystem path | `./acceptxmr.yaml` | Override the config file path. Equivalent to the `--config-file` CLI flag. |
+If the file does not exist on startup, a default file is created automatically.
 
-### 4.2 `.env.example`
-
-```bash
-# .env.example — copy this file to .env and fill in real values.
-# Never commit .env to version control.
-
-# ------------------------------------------------------------------
-# REQUIRED
-# ------------------------------------------------------------------
-
-# Your Monero wallet's private view key (64-character hex string).
-# Obtain this from your Monero wallet software under:
-#   Feather Wallet:  Wallet → View Only → Private View Key
-#   Monero GUI:      Settings → Show seed & keys → Private View Key
-#   Monero CLI:      viewkey
-PRIVATE_VIEWKEY=ad2093a5705b9f33e6f0f0c1bc1f5f639c756cdfc168c8f2ac6127ccbdab3a03
-
-# ------------------------------------------------------------------
-# OPTIONAL — API authentication (requires TLS; see acceptxmr.yaml)
-# ------------------------------------------------------------------
-
-# Bearer token for the internal API (invoice creation/deletion).
-# Generate with: openssl rand -hex 32
-INTERNAL_API_TOKEN=supersecrettoken
-
-# Bearer token for the external API.
-# EXTERNAL_API_TOKEN=anothersecrettoken
-
-# ------------------------------------------------------------------
-# OPTIONAL — Monero daemon authentication
-# ------------------------------------------------------------------
-
-# Password for the Monero daemon RPC login (when daemon.login is set
-# in acceptxmr.yaml).
-# DAEMON_PASSWORD=supersecretpassword
-```
-
-### 4.3 `acceptxmr.yaml` Reference
-
-The file is auto-generated with defaults the first time the server starts if it
-does not already exist. An annotated reference follows:
+Below is a fully annotated example:
 
 ```yaml
-# acceptxmr.yaml — full annotated example
-
-# -----------------------------------------------------------------
-# External API: safe to expose to end users.
-# -----------------------------------------------------------------
 external-api:
-  port: 8080                     # TCP port to listen on.
-  ipv4: 127.0.0.1                # IPv4 bind address. Use 0.0.0.0 to bind all interfaces.
-  # ipv6: ::1                    # Optional IPv6 bind address.
-  static_dir: server/static/    # Directory containing HTML/CSS/JS assets for the payment UI.
-  # tls:                         # Uncomment to enable TLS on this API.
-  #   cert: /path/to/cert.pem
-  #   key:  /path/to/key.pem
-
-# -----------------------------------------------------------------
-# Internal API: must NOT be exposed to the public internet.
-# -----------------------------------------------------------------
-internal-api:
-  port: 8081
+  # Port that end-users connect to (payment UI, GET /invoice, WebSocket).
+  port: 8080
+  # IPv4 address to bind. Use 0.0.0.0 to accept connections from all interfaces.
   ipv4: 127.0.0.1
-  # ipv6: ::1
-  tls:                           # TLS is required when an API token is set.
-    cert: ./cert/certificate.pem
-    key:  ./cert/privatekey.pem
+  # IPv6 address to bind. Comment out to disable IPv6.
+  ipv6: "::1"
+  # Optional bearer token to restrict access. Requires TLS when set.
+  # Prefer EXTERNAL_API_TOKEN environment variable.
+  # token: "..."
+  # Optional TLS configuration.
+  # tls:
+  #   cert: /path/to/certificate.pem
+  #   key:  /path/to/privatekey.pem
+  # Directory containing static files (HTML, CSS, JS) for the payment UI.
   static_dir: server/static/
 
-# -----------------------------------------------------------------
-# Callback configuration
-# -----------------------------------------------------------------
+internal-api:
+  # Port that YOUR back-end uses to create / delete invoices.
+  port: 8081
+  ipv4: 127.0.0.1
+  # ipv6: "::1"
+  # Bearer token required by all internal API calls.
+  # Prefer INTERNAL_API_TOKEN environment variable.
+  # token: "supersecrettoken"
+  tls:
+    # Path to the TLS certificate (PEM format).
+    cert: server/tests/testdata/cert/certificate.pem
+    # Path to the matching private key (PEM format).
+    key:  server/tests/testdata/cert/privatekey.pem
+  static_dir: server/static/
+
 callback:
-  queue-size: 1000               # Maximum number of pending callback requests.
-  max-retries: 50                # Maximum retry attempts per callback. Omit for unlimited.
+  # Maximum number of pending callbacks to queue before dropping.
+  queue-size: 1000
+  # Maximum number of times a failed callback will be retried.
+  # Set to null for unlimited retries.
+  max-retries: 50
 
-# -----------------------------------------------------------------
-# Monero wallet (secrets set via environment variables)
-# -----------------------------------------------------------------
 wallet:
-  primary-address: 4613YiHLM6JMH4zejMB2zJY5TwQCxL8p65ufw8kBP5yxX9itmuGLqp1dS4tkVoTxjyH3aYhYNrtGHbQzJQP5bFus3KHVdmf
-  account-index: 0               # Wallet account index. Defaults to 0.
-  restore-height: null           # Block height from which to start scanning. null = chain tip.
+  # Your Monero primary address (starts with "4" on mainnet).
+  primary-address: "4613YiHLM6JMH4zejMB..."
+  # account-index: 0       # default: 0
+  # restore-height: null   # set to wallet restore height to speed up initial scan
+  # private-viewkey is intentionally absent here — set it via PRIVATE_VIEWKEY env var.
 
-# -----------------------------------------------------------------
-# Monero daemon connection
-# -----------------------------------------------------------------
 daemon:
-  url: https://xmr-node.cakewallet.com:18081/
-  rpc-timeout: 30                # Seconds to wait for an RPC response.
-  connection-timeout: 20         # Seconds to wait when establishing a connection.
-  # login:                       # Uncomment if your node requires authentication.
-  #   username: myuser           # Password must be supplied via DAEMON_PASSWORD env var.
+  # URL of the monerod RPC endpoint.
+  url: "https://xmr-node.cakewallet.com:18081"
+  # Uncomment if your node requires authentication.
+  # login:
+  #   username: "youruser"
+  #   password is set via DAEMON_PASSWORD env var.
+  # RPC call timeout in seconds.
+  rpc-timeout: 30
+  # Initial connection timeout in seconds.
+  connection-timeout: 20
 
-# -----------------------------------------------------------------
-# Invoice database
-# -----------------------------------------------------------------
 database:
-  path: AcceptXMR_DB/            # Directory where the SQLite database is stored.
-  delete-expired: true           # Automatically remove expired, unconfirmed invoices.
+  # Absolute or relative path to the SQLite/Sled database directory.
+  path: AcceptXMR_DB/
+  # Automatically delete expired invoices from the database.
+  delete-expired: true
 
-# -----------------------------------------------------------------
-# Logging
-# -----------------------------------------------------------------
 logging:
-  verbosity: INFO                # One of: ERROR, WARN, INFO, DEBUG, TRACE, OFF
+  # One of: ERROR, WARN, INFO, DEBUG, TRACE
+  verbosity: DEBUG
 ```
 
-### 4.4 Generating Secrets
+---
 
-**Private view key** — export from your Monero wallet:
+### 4.2 Environment variables (secrets)
 
-- *Feather Wallet*: Wallet → View Only → Private View Key
-- *Monero GUI*: Settings → Show seed & keys → Private View Key
-- *Monero CLI*: type `viewkey` at the interactive prompt
+Secrets must **never** be placed in `acceptxmr.yaml` or committed to version
+control. Set them via environment variables or a `.env` file in the working
+directory.
 
-**Random API token**:
+| Variable | Required | Description | Example |
+|----------|----------|-------------|---------|
+| `PRIVATE_VIEWKEY` | **Yes** | Monero wallet private view key (64-char hex). | `ad2093a5705b9f33e6f0f0...` |
+| `INTERNAL_API_TOKEN` | Recommended | Bearer token protecting the internal API. Must be used with TLS. | `a-very-long-random-string` |
+| `EXTERNAL_API_TOKEN` | Optional | Bearer token protecting the external/user-facing API. Must be used with TLS. | `another-random-string` |
+| `DAEMON_PASSWORD` | Conditional | Password for the Monero daemon RPC, if `daemon.login.username` is set in the config. | `supersecretpassword` |
+| `CONFIG_FILE` | Optional | Override the path to `acceptxmr.yaml`. | `/etc/acceptxmr/config.yaml` |
+
+**Fully commented `.env.example`**
+
+```dotenv
+# .env.example — copy to .env and fill in real values.
+# Never commit the real .env file.
+
+# -----------------------------------------------------------------------
+# REQUIRED: Monero wallet private view key.
+# Obtain it from your Monero wallet software:
+#   CLI:  monero-wallet-cli --> viewkey
+#   GUI:  Wallet --> Advanced --> Show Keys --> Private View Key
+# 64 hex characters.
+# -----------------------------------------------------------------------
+PRIVATE_VIEWKEY=ad2093a5705b9f33e6f0f0c1bc1f5f639c756cdfc168c8f2ac6127ccbdab3a03
+
+# -----------------------------------------------------------------------
+# RECOMMENDED: Bearer token for the internal API (creates/deletes invoices).
+# Generate a random token:
+#   Linux / macOS: openssl rand -hex 32
+#   Windows PowerShell: [Convert]::ToBase64String((1..32 | % { Get-Random -Max 256 }))
+# Must be used together with TLS (internal-api.tls in acceptxmr.yaml).
+# -----------------------------------------------------------------------
+INTERNAL_API_TOKEN=supersecrettoken
+
+# -----------------------------------------------------------------------
+# OPTIONAL: Bearer token for the external (user-facing) API.
+# Leave commented out unless you need to restrict access.
+# -----------------------------------------------------------------------
+# EXTERNAL_API_TOKEN=
+
+# -----------------------------------------------------------------------
+# CONDITIONAL: Monero daemon RPC password.
+# Required only when daemon.login.username is set in acceptxmr.yaml.
+# -----------------------------------------------------------------------
+# DAEMON_PASSWORD=
+
+# -----------------------------------------------------------------------
+# OPTIONAL: Path to the configuration YAML file.
+# Defaults to ./acceptxmr.yaml when not set.
+# -----------------------------------------------------------------------
+# CONFIG_FILE=/etc/acceptxmr/acceptxmr.yaml
+```
+
+---
+
+### 4.3 Generating a self-signed TLS certificate (for local development)
+
+The internal API uses TLS. For local development you can generate a self-signed
+certificate with `openssl`:
 
 ```bash
+mkdir -p server/tests/testdata/cert
+openssl req -x509 \
+  -newkey rsa:4096 \
+  -keyout server/tests/testdata/cert/privatekey.pem \
+  -out    server/tests/testdata/cert/certificate.pem \
+  -days   365 \
+  -nodes \
+  -subj   "/CN=localhost"
+```
+
+For production, replace these files with a certificate issued by a trusted CA
+(e.g. Let's Encrypt).
+
+---
+
+### 4.4 Generating an API bearer token
+
+```bash
+# Linux / macOS
 openssl rand -hex 32
+
+# Windows PowerShell
+-join ((1..32) | ForEach-Object { '{0:x2}' -f (Get-Random -Max 256) })
 ```
 
-**Self-signed TLS certificate** (development only):
+Place the output in your `.env` file as `INTERNAL_API_TOKEN`.
 
-```bash
-mkdir -p cert
-openssl req -x509 -newkey rsa:4096 -keyout cert/privatekey.pem \
-  -out cert/certificate.pem -sha256 -days 365 -nodes \
-  -subj "/CN=localhost"
-```
+---
 
-### 4.5 Switching Between Environments
+### 4.5 Switching between environments
 
 | Environment | Recommended approach |
-|-------------|---------------------|
-| Development | Use the default public node; set `logging.verbosity: DEBUG` |
-| Staging | Point `daemon.url` at a stagenet node; use a separate wallet |
-| Production | Point `daemon.url` at a trusted mainnet node; enable TLS; set `INTERNAL_API_TOKEN` |
+|-------------|----------------------|
+| Development | Use public remote node (`xmr-node.cakewallet.com`); `acceptxmr.yaml` binds to `127.0.0.1`; `logging.verbosity: DEBUG` |
+| Staging | Point `daemon.url` at a stagenet node; restrict to a local network; use a staging wallet |
+| Production | Bind to `0.0.0.0`; use a trusted TLS cert; set all tokens; `logging.verbosity: INFO` or `WARN`; enable `delete-expired: true` |
 
 ---
 
 ## 5. Installation
 
-### 5.1 From Source
+Follow these steps on a clean machine. All commands are written for a standard
+POSIX shell (bash / zsh) on Linux or macOS. Windows equivalents are shown where
+they differ.
 
-Follow every numbered step in sequence on a clean machine.
+### Step 1 — Clone the repository
 
-1. **Clone the repository**:
+```bash
+git clone https://github.com/busyboredom/acceptxmr.git
+```
 
-   ```bash
-   git clone https://github.com/busyboredom/acceptxmr.git
-   cd acceptxmr
-   ```
+Expected output:
 
-2. **Verify the Rust toolchain meets the MSRV**:
+```
+Cloning into 'acceptxmr'...
+remote: Enumerating objects: ...
+Resolving deltas: ..., done.
+```
 
-   ```bash
-   rustc --version
-   # Must be 1.76.0 or newer. If not, upgrade:
-   rustup update stable
-   ```
+### Step 2 — Navigate into the project directory
 
-3. **Build all workspace crates** to confirm dependencies resolve correctly:
+```bash
+cd acceptxmr
+```
 
-   ```bash
-   cargo build
-   ```
+### Step 3 — (Docker path) Build and start the server
 
-   Expected output ends with:
+If you are using Docker, skip steps 4–7 and run:
 
-   ```
-   Finished `dev` profile [unoptimized + debuginfo] target(s) in ...
-   ```
+```bash
+# Copy the example env file and edit it
+cp .env .env       # already exists; open in your editor
+# Start with Docker Compose
+mkdir -p AcceptXMR_DB
+docker compose up --build
+```
 
-   > **Common error**: `error: package 'sqlite' requires a newer Rust compiler`
-   > **Fix**: `rustup update stable`
+The server will be available at `http://127.0.0.1:8080`.
 
-4. **Copy the example environment file**:
+### Step 4 — (Native path) Install Rust dependencies
 
-   ```bash
-   cp .env .env.local
-   # Edit .env.local and replace example values with your own:
-   #   PRIVATE_VIEWKEY=<your 64-character hex view key>
-   #   INTERNAL_API_TOKEN=<random token from: openssl rand -hex 32>
-   ```
+Cargo downloads and compiles all crate dependencies automatically:
 
-5. **Copy and review the example configuration file**:
+```bash
+cargo fetch
+```
 
-   ```bash
-   cp acceptxmr.yaml my-acceptxmr.yaml
-   # Edit my-acceptxmr.yaml:
-   #   - Set wallet.primary-address to your Monero primary address.
-   #   - Adjust daemon.url if using a different node.
-   #   - Set TLS cert paths if enabling token authentication.
-   ```
+Expected output (abbreviated):
 
-6. **Generate a self-signed TLS certificate** (required when using
-   `INTERNAL_API_TOKEN`):
+```
+Blocking waiting for file lock on package cache
+Downloading crates ...
+  Downloaded tokio v1.x.x
+  Downloaded axum v0.7.x
+  ...
+```
 
-   ```bash
-   mkdir -p cert
-   openssl req -x509 -newkey rsa:4096 -keyout cert/privatekey.pem \
-     -out cert/certificate.pem -sha256 -days 365 -nodes \
-     -subj "/CN=localhost"
-   ```
+**Common error:** `error: failed to get ... (network error)`
+→ Ensure you have internet access at this step. Dependencies are only
+downloaded once; after that the build works offline.
 
-7. **Verify the installation** by running the test suite:
+### Step 5 — Copy and configure the environment file
 
-   ```bash
-   cargo test --all-features
-   ```
+```bash
+cp .env .env          # file already contains example values — edit as needed
+```
 
-   Expected: all tests pass (output ends with `test result: ok`).
+Open `.env` in your editor and set at minimum:
 
----
+```dotenv
+PRIVATE_VIEWKEY=<your 64-character hex private view key>
+INTERNAL_API_TOKEN=<output of: openssl rand -hex 32>
+```
 
-### 5.2 Using Docker
+### Step 6 — Verify the configuration is valid
 
-1. **Clone the repository**:
+The server validates configuration at startup. Run a quick dry-run to catch
+mistakes before a full build:
 
-   ```bash
-   git clone https://github.com/busyboredom/acceptxmr.git
-   cd acceptxmr
-   ```
+```bash
+# Set CONFIG_FILE to point at the test config to avoid modifying the real one
+CONFIG_FILE=server/tests/testdata/config/config_full.yaml \
+PRIVATE_VIEWKEY=ad2093a5705b9f33e6f0f0c1bc1f5f639c756cdfc168c8f2ac6127ccbdab3a03 \
+INTERNAL_API_TOKEN=supersecrettoken \
+  cargo run --bin acceptxmr-server 2>&1 | head -20
+```
 
-2. **Create the environment file**:
+Press `Ctrl+C` to stop the server. Expected output (first few lines):
 
-   ```bash
-   cp .env .env.local
-   # Edit .env.local with your secrets.
-   ```
+```
+[INFO  acceptxmr_server] Starting AcceptXMR-Server...
+[INFO  acceptxmr_server] External API listening on 127.0.0.1:8080
+[INFO  acceptxmr_server] Internal API listening on 127.0.0.1:8081
+```
 
-3. **Create / review `acceptxmr.yaml`** (the file already exists in the repo as
-   a working example):
+### Step 7 — Verify the installation
 
-   ```bash
-   # Open and edit acceptxmr.yaml — set wallet.primary-address at minimum.
-   ```
+In a second terminal, send a health-check request:
 
-4. **Create the database directory**:
+```bash
+curl -s http://127.0.0.1:8080/invoice?id=invalid | head -c 200
+```
 
-   ```bash
-   mkdir -p AcceptXMR_DB
-   ```
+Expected response (HTTP 400 or a JSON error body — proof the server is up):
 
-5. **Build and start the server**:
+```json
+{"error":"invalid invoice ID"}
+```
 
-   ```bash
-   docker compose up --build
-   ```
-
-   Expected output contains:
-
-   ```
-   server  | INFO acceptxmr_server: Starting AcceptXMR-Server
-   server  | INFO acceptxmr_server: External API listening on 127.0.0.1:8080
-   server  | INFO acceptxmr_server: Internal API listening on 127.0.0.1:8081
-   ```
-
-6. **Or pull the pre-built image** (no build step required):
-
-   ```bash
-   docker pull busyboredom/acceptxmr:latest
-   docker run -d \
-     --name acceptxmr \
-     --network host \
-     --mount type=bind,source="${PWD}/AcceptXMR_DB",target=/AcceptXMR_DB \
-     --mount type=bind,source="${PWD}/cert",target=/cert \
-     --mount type=bind,source="${PWD}/acceptxmr.yaml",target=/acceptxmr.yaml \
-     --env-file .env.local \
-     busyboredom/acceptxmr:latest
-   ```
+**Common error:** `curl: (7) Failed to connect to 127.0.0.1 port 8080`
+→ The server is not yet running. Complete Step 6 first.
 
 ---
 
 ## 6. Build
 
-### 6.1 Development Build
+### Development Build
 
-Start a debug build in watch mode using `cargo-watch` (install once):
+Start the server in development mode with debug logging:
+
+```bash
+RUST_LOG=debug \
+PRIVATE_VIEWKEY=<your-key> \
+INTERNAL_API_TOKEN=<your-token> \
+  cargo run
+```
+
+- External payment UI: `http://127.0.0.1:8080/pay?id=<invoice-id>`
+- Internal API Swagger UI: `https://127.0.0.1:8081/swagger-ui/`
+- External API Swagger UI: `http://127.0.0.1:8080/swagger-ui/`
+
+To enable hot-recompilation as you edit source files, install `cargo-watch`:
 
 ```bash
 cargo install cargo-watch
-cargo watch -x 'run --bin acceptxmr-server'
-```
-
-The server starts at:
-- External API: `http://127.0.0.1:8080`
-- Internal API: `https://127.0.0.1:8081` (TLS)
-- Swagger UI (external): `http://127.0.0.1:8080/swagger-ui/`
-- Swagger UI (internal): `https://127.0.0.1:8081/swagger-ui/`
-
-Source file changes trigger an automatic rebuild and restart.
-
-To run the server with a custom config file path:
-
-```bash
-cargo run --bin acceptxmr-server -- --config-file /path/to/my-acceptxmr.yaml
-```
-
-Alternatively, via environment variable:
-
-```bash
-CONFIG_FILE=/path/to/my-acceptxmr.yaml cargo run --bin acceptxmr-server
+cargo watch -x run
 ```
 
 ---
 
-### 6.2 Production Build
+### Production Build
 
-1. **Compile with full optimisations** (LTO is enabled in `[profile.release]`):
+Build an optimised release binary with link-time optimisation (LTO enabled in
+`Cargo.toml`):
 
-   ```bash
-   cargo build --release
-   ```
+```bash
+cargo build --release
+```
 
-2. **Locate the binary**:
+Output artifact: `target/release/acceptxmr-server`
 
-   ```bash
-   ls -lh target/release/acceptxmr-server
-   ```
+Expected build time on a modern laptop: approximately 3–6 minutes on the first
+run (all dependencies compiled from source). Subsequent builds are incremental
+and take 10–30 seconds.
 
-3. **Run the production binary**:
+**Pre-build step** — generate a TLS certificate if you do not already have one:
 
-   ```bash
-   ./target/release/acceptxmr-server --config-file /etc/acceptxmr/acceptxmr.yaml
-   ```
+```bash
+openssl req -x509 \
+  -newkey rsa:4096 \
+  -keyout server/tests/testdata/cert/privatekey.pem \
+  -out    server/tests/testdata/cert/certificate.pem \
+  -days 365 -nodes -subj "/CN=localhost"
+```
 
-4. **Verify the binary starts correctly**:
+**Run the release binary**
 
-   ```bash
-   curl -s http://127.0.0.1:8080/swagger-ui/ | grep -i "swagger"
-   # Expected: HTML containing "Swagger UI"
-   ```
+```bash
+PRIVATE_VIEWKEY=<your-key> \
+INTERNAL_API_TOKEN=<your-token> \
+  ./target/release/acceptxmr-server
+```
+
+**Verify the build output**
+
+```bash
+# Check the binary exists and is executable
+ls -lh target/release/acceptxmr-server
+
+# Confirm it starts without errors
+./target/release/acceptxmr-server --help
+```
 
 ---
 
-### 6.3 Docker Production Build
+### Docker Production Build
 
-Build a multi-arch image locally:
+Build the multi-arch Docker image locally (requires BuildKit / Docker Buildx):
 
 ```bash
+# Build for the current platform only
+docker build -t acceptxmr:local .
+
+# Build for both amd64 and arm64 (requires QEMU binfmt on Linux)
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -t acceptxmr:latest \
-  --load \
+  --tag acceptxmr:local \
   .
 ```
 
-To build for a single platform (faster, useful for local testing):
+Expected output (abbreviated):
 
-```bash
-docker build -t acceptxmr:latest .
 ```
-
-Verify the image:
-
-```bash
-docker run --rm acceptxmr:latest ./acceptxmr-server --help
+[+] Building 240.0s (18/18) FINISHED
+ => CACHED [build 1/9] FROM docker.io/library/rust:1.76-slim-bookworm
+ => [build 9/9] RUN ... cargo build --release
+ => [final 2/3] COPY --from=build /acceptxmr-server/acceptxmr-server .
 ```
 
 ---
 
-### 6.4 CI/CD Build (Headless / Automated)
+### CI/CD Build (Headless / Automated)
 
-The repository ships two GitHub Actions workflows.
+The project ships two GitHub Actions workflows.
 
-#### Rust CI workflow (`.github/workflows/rust.yml`)
-
-Runs on every push and pull request. Performs:
-- `cargo fmt --all -- --check` (nightly)
-- `cargo clippy --all-targets --all-features` (nightly)
-- `cargo doc --all-features --all` (nightly)
-- `cargo build --verbose` (stable 1.76 and nightly)
-- `cargo test --verbose --all-features` (stable 1.76 and nightly)
+**`rust.yml`** — runs on every push/PR:
 
 ```yaml
-# .github/workflows/rust.yml — included verbatim for reference
-name: rust-ci
-
-on:
-  push:
-    branches: ['main']
-    tags: ['*']
-  pull_request:
-    branches: ['*']
-
-env:
-  CARGO_TERM_COLOR: always
-  RUSTFLAGS: '-D warnings'
-  RUSTDOCFLAGS: '-D warnings'
-
+# .github/workflows/rust.yml (excerpt)
 jobs:
   static_analysis:
     runs-on: ubuntu-latest
@@ -713,7 +836,6 @@ jobs:
         with:
           toolchain: nightly
           override: true
-          profile: minimal
           components: rustfmt, clippy
       - name: Rustfmt
         run: cargo fmt --all -- --check
@@ -721,7 +843,6 @@ jobs:
         run: cargo clippy --all-targets --all-features
       - name: Doc
         run: cargo doc --all-features --all
-
   build:
     strategy:
       matrix:
@@ -729,18 +850,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3.3.0
-      - name: Install Rust ${{ matrix.rust }}
-        uses: actions-rs/toolchain@v1.0.6
-        with:
-          toolchain: ${{ matrix.rust }}
-          override: true
-          profile: minimal
       - uses: Swatinem/rust-cache@v2.2.1
-      - name: Build
-        run: cargo build --verbose
-      - name: Build with all features
-        run: cargo build --verbose --all-features
-
+      - run: cargo build --verbose
+      - run: cargo build --verbose --all-features
   test:
     strategy:
       matrix:
@@ -748,124 +860,150 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3.3.0
-      - name: Install Rust ${{ matrix.rust }}
-        uses: actions-rs/toolchain@v1.0.6
-        with:
-          toolchain: ${{ matrix.rust }}
-          override: true
-          profile: minimal
       - uses: Swatinem/rust-cache@v2.2.1
       - run: cargo test --verbose --all-features
 ```
 
-#### Injecting secrets in CI
-
-Add the following repository secrets in GitHub → Settings → Secrets and
-variables → Actions:
-
-| Secret name | Description |
-|-------------|-------------|
-| `DOCKERHUB_USERNAME` | Docker Hub username (Docker workflow only) |
-| `DOCKERHUB_TOKEN` | Docker Hub access token (Docker workflow only) |
-
-To inject `PRIVATE_VIEWKEY` during a test run that needs it:
+**`docker.yml`** — builds and pushes the Docker image on tags and main-branch
+merges:
 
 ```yaml
-env:
-  PRIVATE_VIEWKEY: ${{ secrets.PRIVATE_VIEWKEY }}
+# .github/workflows/docker.yml (excerpt)
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 ```
 
-#### Running the full CI pipeline locally (no GitHub required)
+**Injecting secrets in CI**
 
-Install [`act`](https://github.com/nektos/act):
+Add the following repository secrets in your GitHub repository settings
+(`Settings → Secrets and variables → Actions → New repository secret`):
+
+| Secret name | Value |
+|-------------|-------|
+| `DOCKERHUB_USERNAME` | Your Docker Hub username |
+| `DOCKERHUB_TOKEN` | Docker Hub access token |
+
+No interactive prompts are present in either workflow.
+
+---
+
+### PHP Site Generator Build (`configure_site.py`)
+
+The generator requires no build step; run it directly:
 
 ```bash
-# macOS
-brew install act
+# macOS / Linux
+python3 configure_site.py
 
-# Linux
-curl -s https://raw.githubusercontent.com/nektos/act/master/install.sh | sudo bash
+# Windows
+python configure_site.py
+
+# With explicit options
+python3 configure_site.py \
+  --repo-root . \
+  --output ./site-output \
+  --wallet 4YourMoneroPrimaryAddressHere
 ```
 
-Run the Rust CI job locally:
-
-```bash
-act push --job build
-```
+Output directory: `./site-output/` (created automatically).
+Upload the entire contents of `site-output/` to any PHP 7.4+ web host.
 
 ---
 
 ## 7. Running Tests
 
-### 7.1 Run the Full Test Suite
+All tests run via standard Cargo commands. No additional test framework
+installation is required.
+
+### Run all tests
 
 ```bash
 cargo test --all-features
 ```
 
-### 7.2 Run Tests for a Specific Crate
+Expected output (abbreviated):
 
-```bash
-# Library only
-cargo test -p acceptxmr --all-features
-
-# Server only
-cargo test -p acceptxmr-server --all-features
+```
+   Compiling acceptxmr v0.14.0 (library)
+   Compiling acceptxmr-server v0.1.0 (server)
+    Finished test [unoptimized + debuginfo] target(s) in 45.2s
+     Running unittests src/lib.rs (target/debug/deps/acceptxmr-...)
+test result: ok. 42 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+     Running tests/integration_tests/... (target/debug/deps/acceptxmr_server-...)
+test result: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ```
 
-### 7.3 Run a Single Test by Name
+### Run a single test file
 
 ```bash
-cargo test --all-features <test_name>
-# Example:
+# Run only tests in the server config module
+cargo test --all-features -p acceptxmr-server config
+
+# Run only tests in the library crate
+cargo test --all-features -p acceptxmr
+```
+
+### Run a single named test
+
+```bash
 cargo test --all-features default
+# Runs any test whose name contains "default"
 ```
 
-### 7.4 Run Tests with Verbose Output
+### Run tests in verbose mode
 
 ```bash
 cargo test --all-features -- --nocapture
 ```
 
-### 7.5 Run Tests with a Specific Log Level
+### Run tests with the nightly toolchain
+
+The CI pipeline tests against both MSRV (1.76.0) and nightly:
 
 ```bash
-RUST_LOG=debug cargo test --all-features -- --nocapture
+cargo +nightly test --all-features
 ```
 
-### 7.6 Generate and View a Coverage Report
-
-Install `cargo-llvm-cov`:
+### Run linting and formatting checks
 
 ```bash
-cargo install cargo-llvm-cov
-rustup component add llvm-tools-preview
+# Check formatting (does not modify files)
+cargo +nightly fmt --all -- --check
+
+# Run Clippy with all features and all targets
+cargo +nightly clippy --all-targets --all-features
+
+# Build documentation (checks doc-comment validity)
+cargo +nightly doc --all-features --all
 ```
 
-Generate an HTML coverage report:
+### Code coverage (optional)
+
+Install `cargo-tarpaulin` (Linux only):
 
 ```bash
-cargo llvm-cov --all-features --html
-```
-
-Open the report:
-
-```bash
-# macOS
-open target/llvm-cov/html/index.html
-
-# Linux
-xdg-open target/llvm-cov/html/index.html
-```
-
-### 7.7 Expected Output of a Passing Test Run
-
-```
-running X tests
-test config::test::default ... ok
-test config::test::from_yaml ... ok
-...
-test result: ok. X passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+cargo install cargo-tarpaulin
+cargo tarpaulin --all-features --out Html --output-dir coverage/
+# Open coverage/tarpaulin-report.html in a browser
 ```
 
 ---
@@ -873,281 +1011,247 @@ test result: ok. X passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 ## 8. Common Issues & Troubleshooting
 
 | Error Message / Symptom | Cause | Fix |
-|------------------------|-------|-----|
-| `error[E0554]: #![feature] may not be used on the stable release channel` | Nightly-only feature used with stable compiler | `rustup toolchain install nightly && cargo +nightly build` |
-| `error: package '...' requires a newer Rust compiler` | Installed Rust is below MSRV 1.76 | `rustup update stable` |
-| `please configure your monero primary address` (panic on startup) | `wallet.primary-address` is missing from `acceptxmr.yaml` | Add a valid `4...` Monero address to `acceptxmr.yaml` |
-| `please configure your monero private viewkey` (panic on startup) | `PRIVATE_VIEWKEY` env var not set | `export PRIVATE_VIEWKEY=<your 64-char hex key>` or add it to `.env` |
-| `API tokens without TLS are insecure` (panic on startup) | `INTERNAL_API_TOKEN` is set but `tls` is absent from the config | Add TLS cert/key paths under `internal-api.tls` in `acceptxmr.yaml` |
-| `daemon login exists in config, but a password was not set` (panic) | `daemon.login.username` is in YAML but `DAEMON_PASSWORD` is unset | `export DAEMON_PASSWORD=<password>` or remove the `login` block |
-| `Failed to connect to <daemon URL>` at runtime | Monero daemon is unreachable | Check daemon URL, network, and firewall; try the default public node |
-| `No such file or directory` for cert PEM files | TLS cert files do not exist at the configured paths | Run the `openssl req` command from §4.4 and update paths in YAML |
-| `cargo: command not found` | Rust toolchain not installed | Follow §2.2 |
-| `docker compose up` exits with `port is already allocated` | Port 8080 or 8081 already in use | Change `external-api.port` / `internal-api.port` in `acceptxmr.yaml` |
+|-------------------------|-------|-----|
+| `please configure your monero primary address` (panic on startup) | `wallet.primary-address` is missing or empty in `acceptxmr.yaml` | Set `primary-address:` in `acceptxmr.yaml` to your Monero address starting with `4` |
+| `please configure your monero private viewkey` (panic on startup) | `PRIVATE_VIEWKEY` env var is not set | Add `PRIVATE_VIEWKEY=<64-char hex key>` to `.env` and ensure the `.env` file is in the working directory |
+| `API tokens without TLS are insecure` (panic on startup) | `token` is set in the config but `tls` is not | Either remove the token, or add TLS config (`tls.cert` + `tls.key`) to the relevant API section |
+| `error: linker 'cc' not found` during `cargo build` | C linker not installed on Linux | `sudo apt install -y build-essential` |
+| `error[E0463]: can't find crate for 'std'` | Rust toolchain not properly installed | Run `rustup default stable` and then retry |
+| `Connection refused` on port 8080 | Server not started, or bound to a different address | Run `cargo run` (or Docker), then check the log output for the actual bound address |
+| `docker: Error response from daemon: Bind for 0.0.0.0:8080 failed: port is already allocated` | Port 8080 is in use on the host | Change `external-api.port` in `acceptxmr.yaml` to an unused port, or stop the conflicting process |
+| `WARN ... Could not load config from payment-config.json` in `configure_site.py` | `investment-platform/payment-config.json` not found relative to `--repo-root` | Run the script from the repository root, or pass `--repo-root /path/to/repo` |
+| `Unsupported target arch` during Docker cross-compile | `TARGETARCH` is neither `amd64` nor `arm64` | Specify the platform explicitly: `docker build --platform linux/amd64 .` |
+| Integration tests hang indefinitely | Tests attempt to connect to a live Monero node that is unreachable | The library ships an `httpmock`-based test harness; ensure `--all-features` is passed so the mock daemon is compiled in |
+| `error: failed to parse private viewkey` | View key string is invalid (not 64 hex chars) | Re-export the view key from your Monero wallet and confirm it is exactly 64 hexadecimal characters |
 
 ---
 
 ## 9. Project Structure
 
 ```
-acceptxmr/                        ← Workspace root
-├── Cargo.toml                    ← Workspace manifest; shared dependency versions
-├── Cargo.lock                    ← Locked dependency tree
-├── acceptxmr.yaml                ← Example / default server configuration file
-├── .env                          ← Example environment variable file (secrets)
-├── Dockerfile                    ← Multi-stage, multi-arch Docker build
-├── docker-compose.yml            ← Compose file for local Docker development
-├── docker.sh                     ← Convenience shell script for `docker run`
-├── clippy.toml                   ← Clippy lint configuration
-├── .rustfmt.toml                 ← rustfmt code formatting rules
-├── typos.toml                    ← typos spell-checker configuration
-├── CHANGELOG.md                  ← Human-readable version history
+acceptxmr/                         # Cargo workspace root
 │
-├── .cargo/
-│   └── config.toml               ← Cargo build flags (tokio_unstable, sparse registry)
+├── Cargo.toml                     # Workspace manifest; shared dependency versions
+├── Cargo.lock                     # Reproducible dependency lock file
+├── acceptxmr.yaml                 # Example server configuration file
+├── .env                           # Example secrets file (do NOT commit real secrets)
+├── Dockerfile                     # Multi-stage, multi-arch Docker image build
+├── docker-compose.yml             # Local Docker Compose stack definition
+├── docker.sh                      # Convenience shell script to run docker run
+├── configure_site.py              # Zero-JS PHP site generator (Python, stdlib only)
+├── CHANGELOG.md                   # Semantic-versioned change history
+├── README.md                      # This file
+├── LICENSE-MIT                    # MIT licence text
+├── LICENSE-APACHE                 # Apache-2.0 licence text
+├── clippy.toml                    # Clippy lint configuration (allowed duplicates)
+├── .rustfmt.toml                  # Rust code formatting configuration
+├── typos.toml                     # Typo-checking configuration
+├── flake.nix / flake.lock         # Nix development shell (optional)
 │
-├── .github/
-│   ├── workflows/
-│   │   ├── rust.yml              ← CI: fmt, clippy, build, test (stable + nightly)
-│   │   └── docker.yml            ← CI: build & push Docker image to Docker Hub
-│   └── pull_request_template.md  ← PR checklist template
-│
-├── library/                      ← `acceptxmr` crate (the Rust library)
-│   ├── Cargo.toml
-│   ├── README.md
+├── library/                       # `acceptxmr` crate — the core Rust library
+│   ├── Cargo.toml                 # Library crate manifest and feature flags
+│   ├── README.md                  # Library-specific documentation
 │   ├── src/
-│   │   ├── lib.rs                ← Public API surface
-│   │   ├── payment_gateway.rs    ← PaymentGateway struct and builder
-│   │   ├── invoice.rs            ← Invoice type and state machine
-│   │   ├── scanner.rs            ← Block/txpool scanning loop
-│   │   ├── pubsub.rs             ← Subscriber / notification channel
-│   │   ├── caching/              ← In-memory output-key and height caches
-│   │   ├── monerod_client/       ← Hyper-based Monero daemon RPC client
-│   │   └── storage/              ← InvoiceStorage trait + Sled/SQLite/InMemory backends
+│   │   └── lib.rs                 # Public API entry point; re-exports all types
 │   ├── examples/
-│   │   ├── websockets/           ← Actix-web WebSocket payment demo
-│   │   ├── nojs/                 ← Server-side-rendered (no JS) payment demo
-│   │   ├── persistence/          ← SQLite persistence example
-│   │   └── custom_storage/       ← Custom storage backend example
-│   └── tests/                    ← Integration tests for the library
+│   │   ├── nojs/                  # Example: server with no client-side JS
+│   │   ├── websockets/            # Example: real-time updates via WebSocket
+│   │   ├── persistence/           # Example: SQLite persistent storage
+│   │   └── custom_storage/        # Example: custom InvoiceStore implementation
+│   └── tests/                     # Library integration tests
 │
-├── server/                       ← `acceptxmr-server` crate (the binary)
-│   ├── Cargo.toml
-│   ├── README.md
-│   ├── acceptxmr.yaml            ← Server-specific example config
+├── server/                        # `acceptxmr-server` crate — the gateway binary
+│   ├── Cargo.toml                 # Server crate manifest
+│   ├── README.md                  # Server-specific documentation
+│   ├── acceptxmr.yaml             # Server's own test configuration file
 │   ├── src/
-│   │   ├── main.rs               ← Binary entry point
-│   │   ├── lib.rs                ← `entrypoint()` function
-│   │   ├── server/               ← Axum router, handlers, WebSocket logic
-│   │   ├── callbacks.rs          ← Async HTTP callback dispatcher
-│   │   ├── logging.rs            ← env_logger initialisation
-│   │   └── config/               ← Typed configuration structs + YAML/env loading
-│   │       ├── mod.rs            ← Top-level Config struct
-│   │       ├── server.rs         ← ServerConfig / TlsConfig
-│   │       ├── wallet.rs         ← WalletConfig (view key, address)
-│   │       ├── daemon.rs         ← DaemonConfig (URL, login, timeouts)
-│   │       ├── database.rs       ← DatabaseConfig (path, auto-delete)
-│   │       ├── callback.rs       ← CallbackConfig (queue size, retries)
-│   │       └── logging.rs        ← LoggingConfig (verbosity)
-│   ├── static/                   ← Default payment UI assets
-│   │   ├── pay.html              ← Tera template: payment prompt page
-│   │   ├── missing-invoice.html  ← Tera template: expired invoice page
-│   │   ├── error.html            ← Tera template: internal error page
-│   │   ├── acceptxmr.css         ← Default UI stylesheet
-│   │   ├── acceptxmr.js          ← Default UI JavaScript (WebSocket client)
-│   │   ├── favicon.ico
-│   │   └── vendor/               ← Vendored front-end libraries
-│   └── tests/                    ← Integration tests for the server
-│       ├── main.rs
-│       ├── common/               ← Test helpers (server fixture, HTTP client)
-│       ├── integration_tests/    ← Per-endpoint test modules
+│   │   ├── main.rs                # Binary entry point; calls `entrypoint()`
+│   │   ├── lib.rs                 # Library facade; exposes `entrypoint()`
+│   │   ├── callbacks.rs           # HTTP callback dispatch and retry logic
+│   │   ├── logging.rs             # Log initialisation helper
+│   │   ├── config/                # Configuration parsing and validation
+│   │   │   ├── mod.rs             # Top-level `Config` struct; YAML + env loading
+│   │   │   ├── callback.rs        # `CallbackConfig` (queue-size, max-retries)
+│   │   │   ├── daemon.rs          # `DaemonConfig` (URL, login, timeouts)
+│   │   │   ├── database.rs        # `DatabaseConfig` (path, delete-expired)
+│   │   │   ├── logging.rs         # `LoggingConfig` (verbosity level)
+│   │   │   ├── server.rs          # `ServerConfig` + `TlsConfig` (port, addr, TLS)
+│   │   │   └── wallet.rs          # `WalletConfig` (address, view-key, index)
+│   │   └── server/
+│   │       ├── mod.rs             # Builds and starts the Axum HTTP servers
+│   │       ├── auth.rs            # Bearer-token authentication middleware
+│   │       ├── state.rs           # Shared application state injected into handlers
+│   │       ├── tls.rs             # TLS acceptor construction
+│   │       └── api/
+│   │           ├── mod.rs         # Error types and shared response helpers
+│   │           ├── external.rs    # External API routes (GET /invoice, /invoice/ws, /pay)
+│   │           ├── internal.rs    # Internal API routes (POST/DELETE /invoice, /invoice/ids)
+│   │           ├── templating.rs  # Tera template loading and rendering
+│   │           └── types/         # Shared request/response data types
+│   ├── static/                    # Static files served by the payment UI
+│   │   ├── pay.html               # Tera template: payment prompt page
+│   │   ├── missing-invoice.html   # Tera template: expired invoice page
+│   │   ├── error.html             # Tera template: generic error page
+│   │   ├── acceptxmr.css          # Default payment UI stylesheet
+│   │   ├── acceptxmr.js           # WebSocket update client (payment UI only)
+│   │   ├── favicon.ico            # Browser favicon
+│   │   └── vendor/
+│   │       └── qrcode.js          # QR code renderer (vendored, no CDN)
+│   └── tests/
+│       ├── main.rs                # Integration test harness
+│       ├── integration_tests/     # End-to-end server tests (mock daemon)
+│       ├── common/                # Shared test helpers
 │       └── testdata/
-│           ├── cert/             ← Self-signed certs for testing
-│           └── config/           ← YAML fixture configs for config tests
+│           ├── cert/              # Self-signed TLS certificate for tests
+│           └── config/            # Test configuration YAML files
 │
-├── testing-utils/                ← Shared test helpers (mock Monero daemon)
+├── testing-utils/                 # Shared test helpers crate (not published)
 │   ├── Cargo.toml
-│   ├── src/
-│   └── rpc_resources/            ← Recorded Monero RPC JSON fixtures
+│   ├── src/                       # Mock Monero daemon and blockchain helpers
+│   └── rpc_resources/             # Captured RPC responses used by the mock daemon
 │
-└── investment-platform/          ← Drop-in JS XMR payment button scanner
-    ├── inject.js
-    ├── scanner.js
-    ├── xmr-converter.js
-    ├── payment-overlay.js
-    ├── payment-config.json
-    ├── styles.css
-    └── README.md
+└── investment-platform/           # Source for the zero-JS PHP site generator
+    ├── payment-config.json        # Investment tiers, API URL, defaults
+    ├── styles.css                 # Overlay styles (used by configure_site.py as reference)
+    ├── scanner.js                 # (Source reference only — NOT included in generated output)
+    ├── xmr-converter.js           # (Source reference only — NOT included in generated output)
+    ├── payment-overlay.js         # (Source reference only — NOT included in generated output)
+    ├── inject.js                  # (Source reference only — NOT included in generated output)
+    └── README.md                  # Investment platform documentation
 ```
 
 ---
 
 ## 10. Scripts Reference
 
-This project uses Cargo commands as its primary build system. There is no
-`Makefile` or `package.json`. All commands are invoked via `cargo`.
+The project does not use a `package.json` or `Makefile`; all automation is
+done through `cargo` sub-commands, Docker commands, and the Python generator
+script.
+
+### Cargo commands
 
 | Command | Description |
 |---------|-------------|
-| `cargo build` | Debug build of all workspace members |
-| `cargo build --release` | Optimised production build (LTO enabled) |
-| `cargo build --all-features` | Debug build with all optional Cargo features enabled |
-| `cargo run --bin acceptxmr-server` | Build and run the server binary (debug) |
-| `cargo run --release --bin acceptxmr-server` | Build and run the server binary (release) |
-| `cargo test` | Run unit tests for all workspace members |
-| `cargo test --all-features` | Run all tests with every optional feature enabled |
-| `cargo test -p acceptxmr` | Run tests for the library crate only |
-| `cargo test -p acceptxmr-server` | Run tests for the server crate only |
-| `cargo fmt --all` | Format all Rust source files (requires nightly) |
-| `cargo fmt --all -- --check` | Check formatting without modifying files |
-| `cargo clippy --all-targets --all-features` | Run the Clippy linter on all targets |
-| `cargo doc --all-features --all --open` | Build and open API documentation in browser |
-| `cargo clean` | Remove all build artefacts |
-| `docker compose up --build` | Build locally and start the server in Docker |
-| `docker compose up -d` | Start the server in Docker (detached) |
-| `docker compose down` | Stop and remove Docker containers |
-| `sh docker.sh` | Convenience script: `docker run` with pre-filled paths |
+| `cargo build` | Debug build of the entire workspace |
+| `cargo build --release` | Optimised release build (LTO enabled) |
+| `cargo build --all-features` | Build with every optional feature enabled |
+| `cargo run` | Build and run `acceptxmr-server` in debug mode |
+| `cargo run --release` | Build and run in release mode |
+| `cargo test --all-features` | Run all unit and integration tests |
+| `cargo +nightly fmt --all -- --check` | Check code formatting without modifying files |
+| `cargo +nightly clippy --all-targets --all-features` | Run all Clippy lints |
+| `cargo +nightly doc --all-features --all` | Build and validate documentation |
+| `cargo fetch` | Pre-download all dependencies (useful in offline environments) |
+
+### Docker commands
+
+| Command | Description |
+|---------|-------------|
+| `docker compose up --build` | Build image locally and start the server stack |
+| `docker compose up -d` | Start the stack in detached (background) mode |
+| `docker compose down` | Stop and remove containers |
+| `docker build -t acceptxmr:local .` | Build the Docker image for the current platform |
+| `docker pull busyboredom/acceptxmr:latest` | Pull the latest pre-built image |
+| `sh docker.sh` | Run the pre-built image using the example `docker run` command |
+
+### Python generator
+
+| Command | Description |
+|---------|-------------|
+| `python3 configure_site.py` | Generate the PHP site into `./site-output/` using defaults |
+| `python3 configure_site.py --output DIR` | Write generated files to `DIR` |
+| `python3 configure_site.py --wallet ADDR` | Override the Monero wallet address |
+| `python3 configure_site.py --repo-root PATH` | Specify the repository root (when running from outside the repo) |
+| `python3 configure_site.py --version` | Print the generator version |
+| `python3 configure_site.py --help` | Show all options |
+
+### Nix development shell (optional)
+
+| Command | Description |
+|---------|-------------|
+| `nix develop` | Enter the Nix dev shell (provides `gcc`, `rustup`, `rust-analyzer`, etc.) |
 
 ---
 
 ## 11. Contributing
 
-### 11.1 Fork and Clone
+### Fork and clone
 
-1. Fork the repository on GitHub.
-2. Clone your fork:
+```bash
+# 1. Fork the repository on GitHub (click "Fork" on the repo page).
 
-   ```bash
-   git clone https://github.com/<your-username>/acceptxmr.git
-   cd acceptxmr
-   ```
+# 2. Clone your fork
+git clone https://github.com/<your-username>/acceptxmr.git
+cd acceptxmr
 
-3. Add the upstream remote:
+# 3. Add the upstream remote
+git remote add upstream https://github.com/busyboredom/acceptxmr.git
+```
 
-   ```bash
-   git remote add upstream https://github.com/busyboredom/acceptxmr.git
-   ```
-
-### 11.2 Branch Naming Convention
-
-Use descriptive, lowercase, hyphen-separated names:
+### Branch naming convention
 
 | Type | Pattern | Example |
 |------|---------|---------|
-| Feature | `feat/<short-description>` | `feat/add-sqlite-backend` |
-| Bug fix | `fix/<short-description>` | `fix/burning-bug-mitigation` |
-| Documentation | `docs/<short-description>` | `docs/update-readme` |
-| Refactor | `refactor/<short-description>` | `refactor/scanner-loop` |
-| CI/CD | `ci/<short-description>` | `ci/add-coverage-report` |
+| Feature | `feature/<short-description>` | `feature/add-sqlite-migrations` |
+| Bug fix | `fix/<short-description>` | `fix/expired-invoice-panic` |
+| Documentation | `docs/<short-description>` | `docs/improve-config-section` |
+| Refactor | `refactor/<short-description>` | `refactor/extract-tls-module` |
 
 ```bash
-git checkout -b feat/my-new-feature
+# Create and switch to a new branch
+git checkout -b feature/my-new-feature
 ```
 
-### 11.3 Linting and Formatting Before a PR
+### Make your changes and run checks
 
-Run all of the following commands and ensure they pass without errors before
-opening a pull request:
+```bash
+# Run all tests
+cargo test --all-features
 
-1. **Format code** (nightly required):
+# Check formatting (CI will fail if this fails)
+cargo +nightly fmt --all -- --check
 
-   ```bash
-   cargo +nightly fmt --all
-   ```
+# Fix formatting automatically
+cargo +nightly fmt --all
 
-2. **Run Clippy**:
+# Run Clippy (CI will fail if this fails)
+cargo +nightly clippy --all-targets --all-features
 
-   ```bash
-   cargo +nightly clippy --all-targets --all-features
-   ```
+# Ensure docs compile without warnings
+cargo +nightly doc --all-features --all
+```
 
-   No warnings are permitted (`RUSTFLAGS='-D warnings'` is enforced in CI).
+### PR checklist
 
-3. **Run all tests**:
+Before opening a pull request, confirm every item below:
 
-   ```bash
-   cargo test --all-features
-   ```
+- [ ] A relevant issue is linked in the PR description.
+- [ ] The change has been manually tested.
+- [ ] Automated test coverage is sufficient for the change.
+- [ ] `cargo +nightly fmt --all -- --check` passes with zero output.
+- [ ] `cargo +nightly clippy --all-targets --all-features` passes with zero warnings.
+- [ ] `README.md` has been updated if the change affects user-facing behaviour.
+- [ ] `CHANGELOG.md` has been updated under the `[Unreleased]` heading.
 
-4. **Build documentation** (no warnings allowed):
+### Submitting the PR
 
-   ```bash
-   RUSTDOCFLAGS='-D warnings' cargo doc --all-features --all
-   ```
+```bash
+# Push your branch to your fork
+git push origin feature/my-new-feature
+```
 
-5. **Check for typos** (requires [`typos-cli`](https://github.com/crate-ci/typos)):
-
-   ```bash
-   cargo install typos-cli
-   typos
-   ```
-
-### 11.4 PR Checklist
-
-When opening a pull request, the repository template will prompt you to confirm:
-
-- [ ] Link relevant issue(s).
-- [ ] Manually test the change.
-- [ ] Ensure sufficient automated test coverage.
-- [ ] Update `README.md` if necessary.
-- [ ] Update `CHANGELOG.md` if necessary.
+Then open a pull request from `<your-username>/acceptxmr:feature/my-new-feature`
+to `busyboredom/acceptxmr:main` on GitHub.
 
 ---
 
 ## 12. License
 
-`AcceptXMR` and `AcceptXMR-Server` are dual-licensed under either of:
+This project is dual-licensed under the **MIT License** and the **Apache
+License, Version 2.0**. You may choose either licence when using this software.
 
-- [MIT License](./LICENSE-MIT)
-- [Apache License, Version 2.0](./LICENSE-APACHE)
+- [MIT License](LICENSE-MIT) — Copyright © 2021–2024 AcceptXMR contributors
+- [Apache License 2.0](LICENSE-APACHE) — Copyright © 2021–2024 AcceptXMR contributors
 
-at your option.
-
-Copyright © 2021–2024 the AcceptXMR contributors.
-
----
-
-### Security Notes
-
-`AcceptXMR` is non-custodial, and does not require a hot wallet. However, it
-does require your private view key and primary address for scanning outputs. If
-keeping these private is important to you, please take appropriate precautions
-to secure the platform you run your application on.
-
-Care is taken to protect users from malicious transactions containing timelocks
-or duplicate output keys (i.e. the [burning
-bug](https://www.getmonero.org/2018/09/25/a-post-mortum-of-the-burning-bug.html)).
-For the best protection against the burning bug, use a dedicated wallet or
-account index for `AcceptXMR` that is not used for any other purpose and set
-`wallet.restore-height` to the wallet's restore height.
-
-Also note that anonymity networks like TOR are not currently supported for RPC
-calls. Your network traffic will reveal that you are interacting with the Monero
-network.
-
-### Reliability Notes
-
-`AcceptXMR` can survive unexpected power loss thanks to persistent storage
-(SQLite or Sled). RPC calls in the scanning thread are logged on failure and
-retried on the next scan cycle. Use `AcceptXMR` at your own risk.
-
-### Performance Notes
-
-It is recommended that you host your own Monero daemon on the same local
-network. Network and daemon latency are the primary cause of high invoice-update
-latency. To reduce average latency, lower the gateway's `scan_interval` (library
-API) below the default of 1 second. Note that reducing the scan interval below
-the round-trip time to your node will have no effect.
-
-### Donations
-
-AcceptXMR is a hobby project. Donations from generous users and community
-members help keep it economically viable to work on.
-
-XMR:
-`82assiV5dy7guoxxV7vSReZTyY5rGMrWg6BsfvFqiEKRcTiDs7LGMpg5dF5gXVGUWPEXQxyt8SNYx8L8HiGAzvtBK3eJ3EY`
-
----
-
-*For the library-specific documentation see [`library/README.md`](./library/README.md).
-For the server-specific documentation see [`server/README.md`](./server/README.md).*
+See [`LICENSE-MIT`](LICENSE-MIT) and [`LICENSE-APACHE`](LICENSE-APACHE) in the
+repository root for the full licence texts.
