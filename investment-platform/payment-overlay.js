@@ -300,6 +300,9 @@
     }, 2000);
   }
 
+  // Standard Monero address (primary + integrated) minimum character length.
+  var MIN_XMR_ADDRESS_LENGTH = 95;
+
   function _getXMRAddress(el) {
     // Check the button itself, then walk up a few ancestors.
     var node = el;
@@ -309,12 +312,12 @@
         node.getAttribute('data-xmr') ||
         node.getAttribute('data-wallet')
       );
-      if (addr && addr.length >= 95) return addr;  // Standard XMR address length.
+      if (addr && addr.length >= MIN_XMR_ADDRESS_LENGTH) return addr;
       node = node.parentNode;
     }
     // Global fallback.
     if (typeof window !== 'undefined' && window.XMR_ADDRESS &&
-        window.XMR_ADDRESS.length >= 95) {
+        window.XMR_ADDRESS.length >= MIN_XMR_ADDRESS_LENGTH) {
       return window.XMR_ADDRESS;
     }
     return null;

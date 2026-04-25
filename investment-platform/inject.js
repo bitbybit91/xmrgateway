@@ -146,9 +146,9 @@
   function _loadScripts(urls, cb) {
     var pending = [];
     var alreadyLoaded = {
-      'scanner.js':   typeof window.PaymentScanner  !== 'undefined',
-      'converter.js': typeof window.XMRConverter    !== 'undefined',
-      'overlay.js':   typeof window.PaymentOverlay  !== 'undefined'
+      'scanner.js':       typeof window.PaymentScanner !== 'undefined',
+      'xmr-converter.js': typeof window.XMRConverter   !== 'undefined',
+      'payment-overlay.js': typeof window.PaymentOverlay !== 'undefined'
     };
 
     urls.forEach(function (url) {
