@@ -1,0 +1,21 @@
+{
+  "name": "cryptoinvest/platform",
+  "description": "Pantera-style crypto investment platform with AcceptXMR Monero payments",
+  "type": "project",
+  "require": {
+    "php": "^8.1",
+    "endroid/qr-code": "^4.8",
+    "phpmailer/phpmailer": "^6.8",
+    "twig/twig": "^3.8",
+    "vlucas/phpdotenv": "^5.5"
+  },
+  "autoload": {
+    "psr-4": {
+      "App\\": "app/"
+    }
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "sort-packages": true
+  }
+}
