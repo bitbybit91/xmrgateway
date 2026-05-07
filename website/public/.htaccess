@@ -1,0 +1,18 @@
+RewriteEngine On
+Options -Indexes
+
+# Block direct access to includes directory
+RewriteRule ^includes/ - [F,L]
+
+# Block access to SQL files
+RewriteRule \.sql$ - [F,L]
+
+# Block access to shell scripts
+RewriteRule \.sh$ - [F,L]
+
+# Security: prevent access to hidden files
+RewriteRule (^|/)\.(?!well-known/) - [F,L]
+
+# Redirect to HTTPS (uncomment after SSL setup)
+# RewriteCond %{HTTPS} off
+# RewriteRule ^ https://%{HTTP_HOST}%{REQUEST_URI} [R=301,L]
