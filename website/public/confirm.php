@@ -179,7 +179,6 @@ $meta_refresh = ($current_status === 'pending') ? '<meta http-equiv="refresh" co
     <?= $meta_refresh ?>
     <title><?= htmlspecialchars($page_title, ENT_QUOTES, 'UTF-8') ?> — <?= htmlspecialchars(SITE_NAME, ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="stylesheet" href="/assets/css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
 <?php require_once dirname(__DIR__) . '/includes/header.php'; ?>
