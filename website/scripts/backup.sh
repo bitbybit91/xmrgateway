@@ -31,7 +31,7 @@ echo "[$(date '+%Y-%m-%d %H:%M:%S')] Website backup complete: ${BACKUP_DIR}/webs
 
 # 3. Remove old backups
 echo "[$(date '+%Y-%m-%d %H:%M:%S')] Removing backups older than ${RETENTION_DAYS} days..."
-find "$BACKUP_BASE" -maxdepth 1 -type d -mtime "+${RETENTION_DAYS}" -print -exec rm -rf {} \;
+find "$BACKUP_BASE" -maxdepth 1 -type d -mtime +${RETENTION_DAYS} -print -exec rm -rf {} \;
 
 # 4. Summary
 DB_SIZE=$(du -sh "${BACKUP_DIR}/database.sql.gz" | cut -f1)

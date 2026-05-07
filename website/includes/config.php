@@ -20,8 +20,10 @@ define('LOGIN_MAX_ATTEMPTS', 5);
 define('LOGIN_LOCKOUT_MINUTES', 15);
 
 // Session cookie settings
+// Note: session.cookie_secure=1 requires HTTPS. Set to 0 during initial HTTP-only setup,
+// then re-enable after running: certbot --apache -d yourdomain.com
 ini_set('session.cookie_httponly', 1);
-ini_set('session.cookie_secure', 1);
+ini_set('session.cookie_secure', getenv('HTTPS_ENABLED') ? 1 : ((!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 1 : 0));
 ini_set('session.cookie_samesite', 'Strict');
 ini_set('session.use_strict_mode', 1);
 ini_set('session.gc_maxlifetime', 3600);
