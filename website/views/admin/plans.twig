@@ -1,0 +1,59 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Plans — Admin{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set admin_page = 'plans' %}
+  {% include 'admin/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header"><h1>Investment Plans</h1></div>
+    {% if flash_success %}<div class="alert alert-success">{{ flash_success }}</div>{% endif %}
+
+    <div class="dash-section">
+      <h2>Current Plans</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Name</th><th>Type</th><th>Daily ROI</th><th>Duration</th><th>Min/Max USD</th><th>Active</th><th>Actions</th></tr></thead>
+          <tbody>
+            {% for plan in plans %}
+            <tr>
+              <td>{{ plan.name }}</td>
+              <td>{{ plan.type|replace({'_':' '})|title }}</td>
+              <td>{{ plan.daily_roi_percent }}%</td>
+              <td>{{ plan.duration_days }}d</td>
+              <td>${{ plan.min_amount_usd|number_format(0) }} / ${{ plan.max_amount_usd|number_format(0) }}</td>
+              <td>{{ plan.is_active ? '✅' : '❌' }}</td>
+              <td>
+                <form method="POST" action="{{ app_url }}/admin/plans/{{ plan.id }}/delete" style="display:inline" onsubmit="return confirm('Deactivate this plan?')">
+                  {{ csrf_token|raw }}
+                  <button type="submit" class="btn btn-ghost btn-sm">Deactivate</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="dash-section">
+      <h2>Add New Plan</h2>
+      <form method="POST" action="{{ app_url }}/admin/plans" class="settings-form">
+        {{ csrf_token|raw }}
+        <div class="form-row">
+          <div class="form-group"><label>Name</label><input type="text" name="name" required></div>
+          <div class="form-group"><label>Slug</label><input type="text" name="slug" required placeholder="my-plan"></div>
+        </div>
+        <div class="form-group"><label>Description</label><textarea name="description" rows="2"></textarea></div>
+        <div class="form-row">
+          <div class="form-group"><label>Min USD</label><input type="number" name="min_amount_usd" min="1" step="0.01" value="100"></div>
+          <div class="form-group"><label>Max USD</label><input type="number" name="max_amount_usd" min="1" step="0.01" value="1000000"></div>
+          <div class="form-group"><label>Daily ROI %</label><input type="number" name="daily_roi_percent" step="0.0001" min="0" value="0.0800"></div>
+          <div class="form-group"><label>Duration (days)</label><input type="number" name="duration_days" min="1" value="30"></div>
+        </div>
+        <div class="form-group"><label>Type</label><select name="type"><option value="liquid_token">Liquid Token</option><option value="early_token">Early Token</option><option value="venture">Venture</option></select></div>
+        <button type="submit" class="btn btn-primary">Create Plan</button>
+      </form>
+    </div>
+  </main>
+</div>
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Dashboard — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set active_page = 'overview' %}
+  {% include 'dashboard/partials/sidebar.twig' %}
+
+  <main class="dash-main">
+    <div class="dash-header">
+      <h1>Welcome, {{ current_user.name }}</h1>
+      <a href="{{ app_url }}/dashboard/invest" class="btn btn-primary">+ New Investment</a>
+    </div>
+
+    {% if flash_success %}<div class="alert alert-success">{{ flash_success }}</div>{% endif %}
+    {% if flash_error %}<div class="alert alert-error">{{ flash_error }}</div>{% endif %}
+    {% if flash_info %}<div class="alert alert-info">{{ flash_info }}</div>{% endif %}
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">Available Balance</div><div class="kpi-value">{{ balance|format_usd }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Total Invested</div><div class="kpi-value">{{ totalInvested|format_usd }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Total ROI Earned</div><div class="kpi-value kpi-green">{{ totalRoi|format_usd }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Active Investments</div><div class="kpi-value">{{ investments|length }}</div></div>
+    </div>
+
+    <!-- Withdraw button if balance > 0 -->
+    {% if balance > 0 %}
+    <div class="withdraw-bar">
+      <span>You have {{ balance|format_usd }} available to withdraw.</span>
+      <button class="btn btn-outline" onclick="document.getElementById('withdraw-modal').style.display='flex'">Withdraw</button>
+    </div>
+    {% endif %}
+
+    <!-- Active Investments -->
+    <div class="dash-section">
+      <h2>Active Investments</h2>
+      {% if investments %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Plan</th><th>Amount</th><th>Daily ROI</th><th>Matures</th><th>ROI Earned</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for inv in investments %}
+            <tr>
+              <td>{{ inv.plan_name }}</td>
+              <td>{{ inv.amount_usd|format_usd }}</td>
+              <td>{{ inv.daily_roi_percent }}%</td>
+              <td>{{ inv.end_date ? inv.end_date|date('M j, Y') : '—' }}</td>
+              <td class="text-green">{{ inv.total_roi_usd|format_usd }}</td>
+              <td><span class="status-badge status-{{ inv.status }}">{{ inv.status|replace({'_': ' '})|title }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="empty-state"><p>No active investments yet.</p><a href="{{ app_url }}/dashboard/invest" class="btn btn-primary">Make Your First Investment</a></div>
+      {% endif %}
+    </div>
+
+    <!-- Recent Transactions -->
+    <div class="dash-section">
+      <h2>Recent Transactions</h2>
+      {% if recent %}
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Date</th><th>Type</th><th>Amount (USD)</th><th>XMR</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for tx in recent %}
+            <tr>
+              <td>{{ tx.created_at|date('M j, Y H:i') }}</td>
+              <td><span class="tx-type tx-{{ tx.type }}">{{ tx.type|title }}</span></td>
+              <td>{{ tx.amount_usd|format_usd }}</td>
+              <td>{{ tx.amount_xmr|format_xmr }}</td>
+              <td><span class="status-badge status-{{ tx.status }}">{{ tx.status|title }}</span></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="text-muted">No transactions yet.</p>
+      {% endif %}
+    </div>
+  </main>
+</div>
+
+<!-- Withdraw Modal -->
+<div class="modal-overlay" id="withdraw-modal" style="display:none">
+  <div class="modal">
+    <h2>Withdraw Funds</h2>
+    <form method="POST" action="{{ app_url }}/dashboard/withdraw">
+      {{ csrf_token|raw }}
+      <div class="form-group">
+        <label>Amount (USD) — Available: {{ balance|format_usd }}</label>
+        <input type="number" name="amount" min="10" max="{{ balance }}" step="0.01" placeholder="100.00" required>
+      </div>
+      <div class="form-group">
+        <label>Your XMR Address</label>
+        <input type="text" name="xmr_address" placeholder="4..." required minlength="90">
+      </div>
+      <div class="modal-actions">
+        <button type="submit" class="btn btn-primary">Request Withdrawal</button>
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('withdraw-modal').style.display='none'">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

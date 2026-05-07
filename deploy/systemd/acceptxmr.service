@@ -1,0 +1,30 @@
+[Unit]
+Description=AcceptXMR Monero Payment Gateway
+After=network.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=acceptxmr
+Group=acceptxmr
+WorkingDirectory=/opt/acceptxmr
+ExecStart=/opt/acceptxmr/target/release/acceptxmr-server --config /opt/acceptxmr/acceptxmr.yaml
+Restart=on-failure
+RestartSec=5s
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=acceptxmr
+
+# Load .env for secrets
+EnvironmentFile=-/opt/acceptxmr/.env
+
+# Security hardening
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+ReadWritePaths=/opt/acceptxmr/AcceptXMR_DB
+PrivateTmp=yes
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

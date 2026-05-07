@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% block title %}{{ app_name }}{% endblock %}</title>
+  <meta name="description" content="{% block meta_description %}Institutional-grade crypto investment platform.{% endblock %}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ app_url }}/assets/css/main.css">
+  {% block extra_css %}{% endblock %}
+</head>
+<body>
+  {% if flash_success %}
+  <div class="toast toast-success" id="toast">{{ flash_success }}</div>
+  {% elseif flash_error %}
+  <div class="toast toast-error" id="toast">{{ flash_error }}</div>
+  {% elseif flash_info %}
+  <div class="toast toast-info" id="toast">{{ flash_info }}</div>
+  {% endif %}
+
+  {% include 'partials/nav.twig' %}
+
+  {% block content %}{% endblock %}
+
+  {% include 'partials/footer.twig' %}
+
+  <script src="{{ app_url }}/assets/js/app.js"></script>
+  {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,19 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Portfolio — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-hero"><div class="container"><h1 class="reveal">Our Portfolio</h1><p class="reveal">350+ investments across the crypto ecosystem since 2013.</p></div></section>
+<section class="portfolio-stats"><div class="container"><div class="stats-grid">
+  <div class="stat-card reveal"><div class="stat-value">$2.5B+</div><div class="stat-label">Assets Under Management</div></div>
+  <div class="stat-card reveal"><div class="stat-value">350+</div><div class="stat-label">Portfolio Companies</div></div>
+  <div class="stat-card reveal"><div class="stat-value">35+</div><div class="stat-label">Countries</div></div>
+</div></div></section>
+<section class="portfolio-categories"><div class="container">
+  <h2 class="section-title reveal">Investment Categories</h2>
+  <div class="types-grid">
+    <div class="type-card reveal"><h3>Layer 1 Protocols</h3><p>Core blockchain infrastructure investments including privacy-focused networks, smart contract platforms, and consensus innovations.</p></div>
+    <div class="type-card reveal"><h3>DeFi &amp; Web3</h3><p>Decentralized finance protocols, DEXs, lending platforms, and next-generation Web3 applications.</p></div>
+    <div class="type-card reveal"><h3>Infrastructure &amp; Tools</h3><p>Developer tools, node infrastructure, security auditing firms, and scaling solutions.</p></div>
+  </div>
+</div></section>
+<section class="cta-section"><div class="container"><div class="cta-inner reveal"><h2>Want portfolio exposure?</h2><p>Our Venture Equity fund provides access to our curated portfolio.</p><a href="{{ app_url }}/register" class="btn btn-primary btn-lg">Get Started</a></div></div></section>
+{% endblock %}

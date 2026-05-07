@@ -1,0 +1,72 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Invest — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set active_page = 'invest' %}
+  {% include 'dashboard/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header"><h1>New Investment</h1></div>
+    {% if flash_error %}<div class="alert alert-error">{{ flash_error }}</div>{% endif %}
+
+    <form method="POST" action="{{ app_url }}/dashboard/invest" id="invest-form">
+      {{ csrf_token|raw }}
+      <div class="dash-section">
+        <h2>1. Choose a Plan</h2>
+        <div class="plan-selector">
+          {% for plan in plans %}
+          <label class="plan-option {% if planId == plan.id %}selected{% endif %}">
+            <input type="radio" name="plan_id" value="{{ plan.id }}" {% if planId == plan.id %}checked{% endif %} required>
+            <div class="plan-option-inner">
+              <span class="plan-type-badge">{{ plan.type|replace({'_': ' '})|title }}</span>
+              <h3>{{ plan.name }}</h3>
+              <div class="plan-roi">{{ plan.daily_roi_percent }}% <small>/ day</small></div>
+              <div class="plan-duration">{{ plan.duration_days }} days</div>
+              <div class="plan-range">Min ${{ plan.min_amount_usd|number_format(0) }} — Max ${{ plan.max_amount_usd|number_format(0) }}</div>
+              <div class="plan-total-roi">Total: {{ (plan.daily_roi_percent * plan.duration_days)|number_format(2) }}%</div>
+            </div>
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="dash-section">
+        <h2>2. Enter Amount</h2>
+        <div class="amount-input-group">
+          <div class="form-group">
+            <label for="amount_usd">Investment Amount (USD)</label>
+            <input type="number" id="amount_usd" name="amount_usd" min="1" step="0.01" placeholder="500.00" required>
+          </div>
+          <div class="amount-equiv">
+            <span>≈</span>
+            <span id="xmr-equiv">0.000000</span> XMR
+            <small id="xmr-rate">(1 XMR = $<span id="xmr-price">{{ prices.xmr|number_format(2) }}</span>)</small>
+          </div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn btn-primary btn-lg">Proceed to Payment →</button>
+    </form>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const xmrPrice = {{ prices.xmr }};
+const amtInput = document.getElementById('amount_usd');
+const xmrEquiv = document.getElementById('xmr-equiv');
+
+amtInput.addEventListener('input', () => {
+  const usd = parseFloat(amtInput.value) || 0;
+  xmrEquiv.textContent = (usd / xmrPrice).toFixed(6);
+});
+
+// Highlight selected plan
+document.querySelectorAll('.plan-option input').forEach(radio => {
+  radio.addEventListener('change', () => {
+    document.querySelectorAll('.plan-option').forEach(el => el.classList.remove('selected'));
+    radio.closest('.plan-option').classList.add('selected');
+  });
+});
+</script>
+{% endblock %}

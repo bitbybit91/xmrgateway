@@ -1,0 +1,65 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Funds — {{ app_name }}{% endblock %}
+
+{% block content %}
+<section class="page-hero">
+  <div class="container">
+    <h1 class="reveal">Our Funds</h1>
+    <p class="reveal">Three institutional-grade strategies designed to grow your digital asset portfolio.</p>
+  </div>
+</section>
+
+<section class="funds-section">
+  <div class="container">
+    <div class="fund-filter reveal">
+      <button class="filter-btn active" data-filter="all">All</button>
+      <button class="filter-btn" data-filter="venture">Venture</button>
+      <button class="filter-btn" data-filter="early_token">Early Tokens</button>
+      <button class="filter-btn" data-filter="liquid_token">Liquid Tokens</button>
+    </div>
+
+    <div class="funds-grid" id="funds-grid">
+      {% for plan in plans %}
+      <div class="fund-card reveal" data-type="{{ plan.type }}">
+        <div class="fund-header">
+          <span class="fund-type-badge fund-type-{{ plan.type }}">{{ plan.type|replace({'_': ' '})|title }}</span>
+          <h2>{{ plan.name }}</h2>
+        </div>
+        <div class="fund-body">
+          <p>{{ plan.description }}</p>
+          <div class="fund-metrics">
+            <div class="metric"><div class="metric-val">{{ plan.daily_roi_percent }}%</div><div class="metric-lbl">Daily ROI</div></div>
+            <div class="metric"><div class="metric-val">{{ plan.duration_days }}d</div><div class="metric-lbl">Term</div></div>
+            <div class="metric"><div class="metric-val">${{ plan.min_amount_usd|number_format(0) }}</div><div class="metric-lbl">Minimum</div></div>
+            <div class="metric"><div class="metric-val">${{ plan.max_amount_usd|number_format(0) }}</div><div class="metric-lbl">Maximum</div></div>
+          </div>
+          <div class="fund-roi-total">
+            Total projected return: <strong>{{ (plan.daily_roi_percent * plan.duration_days)|number_format(2) }}%</strong> over {{ plan.duration_days }} days
+          </div>
+        </div>
+        <div class="fund-footer">
+          <a href="{{ app_url }}/register" class="btn btn-primary">Invest in {{ plan.name }}</a>
+        </div>
+      </div>
+      {% else %}
+      <p>No active investment plans at this time. Please check back later.</p>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.filter-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    const filter = btn.dataset.filter;
+    document.querySelectorAll('.fund-card').forEach(card => {
+      card.style.display = (filter === 'all' || card.dataset.type === filter) ? '' : 'none';
+    });
+  });
+});
+</script>
+{% endblock %}

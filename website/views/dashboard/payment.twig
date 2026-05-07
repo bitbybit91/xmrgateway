@@ -1,0 +1,107 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Payment — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set active_page = 'invest' %}
+  {% include 'dashboard/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header"><h1>Complete Payment</h1></div>
+
+    <div class="payment-box">
+      <div class="payment-status" id="payment-status">
+        <span class="status-dot status-pending"></span>
+        <span id="status-text">Awaiting payment...</span>
+      </div>
+
+      <div class="payment-amount">
+        <div class="payment-xmr">
+          {{ invoice.amount_requested|format_xmr }}
+        </div>
+        <div class="payment-usd-equiv">≈ USD equivalent</div>
+      </div>
+
+      {% if qrDataUri %}
+      <div class="payment-qr">
+        <img src="{{ qrDataUri }}" alt="Payment QR Code" width="220" height="220">
+      </div>
+      {% endif %}
+
+      <div class="payment-address-group">
+        <label>Send XMR to this address:</label>
+        <div class="copy-group">
+          <code id="xmr-address" class="xmr-address">{{ invoice.address }}</code>
+          <button class="btn btn-outline btn-sm" onclick="copyText('xmr-address', this)">Copy</button>
+        </div>
+      </div>
+
+      <div class="payment-meta">
+        <div class="meta-row"><span>Invoice ID:</span><code>{{ invoiceId }}</code></div>
+        <div class="meta-row"><span>Confirmations required:</span><span>{{ invoice.confirmations_required }}</span></div>
+        <div class="meta-row"><span>Expires in:</span><span id="countdown">{{ invoice.expiration_in }}s</span></div>
+      </div>
+
+      <div class="payment-note">
+        <p>⚠️ Send <strong>exactly</strong> {{ invoice.amount_requested|format_xmr }} in a single transaction. The page will update automatically once payment is detected.</p>
+      </div>
+
+      <form method="POST" action="{{ app_url }}/dashboard/cancel-invoice" id="cancel-form">
+        {{ csrf_token|raw }}
+        <input type="hidden" name="invoice_id" value="{{ invoiceId }}">
+        <button type="submit" class="btn btn-ghost btn-sm">Cancel &amp; Start Over</button>
+      </form>
+    </div>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const invoiceId = {{ invoiceId|json_encode }};
+const apiUrl    = {{ (app_url ~ '/api/payment-status/' ~ invoiceId)|json_encode }};
+let   pollTimer;
+let   remaining = {{ invoice.expiration_in ?? 3600 }};
+
+function copyText(id, btn) {
+  navigator.clipboard.writeText(document.getElementById(id).textContent.trim());
+  btn.textContent = 'Copied!';
+  setTimeout(() => { btn.textContent = 'Copy'; }, 2000);
+}
+
+function updateCountdown() {
+  const el = document.getElementById('countdown');
+  if (remaining <= 0) { el.textContent = 'Expired'; return; }
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  el.textContent = m > 0 ? `${m}m ${s}s` : `${s}s`;
+  remaining--;
+}
+
+async function pollStatus() {
+  try {
+    const res  = await fetch(apiUrl);
+    const data = await res.json();
+    const statusEl = document.getElementById('status-text');
+    const dotEl    = document.querySelector('.status-dot');
+
+    if (data.confirmed || data.db_status === 'confirmed') {
+      statusEl.textContent = '✅ Payment confirmed! Redirecting...';
+      dotEl.className = 'status-dot status-confirmed';
+      clearInterval(pollTimer);
+      setTimeout(() => { window.location.href = {{ (app_url ~ '/dashboard')|json_encode }}; }, 2000);
+      return;
+    }
+
+    const inv = data.invoice;
+    if (inv && inv.amount_paid > 0) {
+      statusEl.textContent = `Partial payment received (${inv.amount_paid}/${inv.amount_requested} piconeros)`;
+      dotEl.className = 'status-dot status-partial';
+    }
+    if (inv && inv.expiration_in !== undefined) remaining = inv.expiration_in;
+  } catch (e) { /* silently retry */ }
+}
+
+setInterval(updateCountdown, 1000);
+pollTimer = setInterval(pollStatus, 3000);
+pollStatus(); // immediate first check
+</script>
+{% endblock %}

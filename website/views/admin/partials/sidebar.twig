@@ -1,0 +1,12 @@
+<aside class="dash-sidebar">
+  <nav class="dash-nav">
+    <a href="{{ app_url }}/admin" class="dash-nav-item {% if admin_page == 'dashboard' %}active{% endif %}">Dashboard</a>
+    <a href="{{ app_url }}/admin/users" class="dash-nav-item {% if admin_page == 'users' %}active{% endif %}">Users</a>
+    <a href="{{ app_url }}/admin/investments" class="dash-nav-item {% if admin_page == 'investments' %}active{% endif %}">Investments</a>
+    <a href="{{ app_url }}/admin/plans" class="dash-nav-item {% if admin_page == 'plans' %}active{% endif %}">Plans</a>
+    <a href="{{ app_url }}/admin/payouts" class="dash-nav-item {% if admin_page == 'payouts' %}active{% endif %}">Payouts</a>
+    <a href="{{ app_url }}/admin/settings" class="dash-nav-item {% if admin_page == 'settings' %}active{% endif %}">Settings</a>
+    <a href="{{ app_url }}/admin/audit-logs" class="dash-nav-item {% if admin_page == 'audit' %}active{% endif %}">Audit Logs</a>
+    <a href="{{ app_url }}/logout" class="dash-nav-item dash-nav-logout">Logout</a>
+  </nav>
+</aside>

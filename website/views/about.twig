@@ -1,0 +1,12 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}About — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="page-hero"><div class="container"><h1 class="reveal">About Us</h1><p class="reveal">Built by crypto natives, for long-term believers since 2013.</p></div></section>
+<section class="about-mission"><div class="container"><div class="about-text reveal"><h2>Our Mission</h2><p>We believe that privacy-preserving digital currencies and blockchain technology represent the most significant financial innovation of our generation. Our mission is to provide institutional-quality access and portfolio management to investors who share this conviction.</p><p>Since 2013, we have operated with a single focus: generate superior risk-adjusted returns for our investors through disciplined research, active portfolio management, and a long-term investment horizon.</p></div></div></section>
+<section class="team-section"><div class="container"><h2 class="section-title reveal">Leadership Team</h2><div class="team-grid">
+  <div class="team-card reveal"><div class="team-avatar">AK</div><h3>Alex K.</h3><p class="team-title">Chief Investment Officer</p><p>15+ years in institutional asset management. Former portfolio manager at two top-tier hedge funds.</p></div>
+  <div class="team-card reveal"><div class="team-avatar">SR</div><h3>Sofia R.</h3><p class="team-title">Head of Research</p><p>PhD in cryptography. Led blockchain research at a major university before joining the firm in 2015.</p></div>
+  <div class="team-card reveal"><div class="team-avatar">MJ</div><h3>Marcus J.</h3><p class="team-title">Chief Technology Officer</p><p>Open-source contributor and systems architect with deep experience in privacy-preserving protocols.</p></div>
+</div></div></section>
+<section class="cta-section"><div class="container"><div class="cta-inner reveal"><h2>Ready to invest with us?</h2><a href="{{ app_url }}/register" class="btn btn-primary btn-lg">Get Started</a></div></div></section>
+{% endblock %}

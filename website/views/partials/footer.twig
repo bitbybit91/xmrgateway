@@ -1,0 +1,51 @@
+<footer class="footer">
+  <div class="footer-inner">
+    <div class="footer-brand">
+      <div class="footer-logo">{{ app_name }}</div>
+      <p class="footer-tagline">First institutional-grade crypto investment platform.</p>
+    </div>
+    <div class="footer-cols">
+      <div class="footer-col">
+        <h4>Company</h4>
+        <ul>
+          <li><a href="{{ app_url }}/">Home</a></li>
+          <li><a href="{{ app_url }}/about">About</a></li>
+          <li><a href="{{ app_url }}/funds">Funds</a></li>
+          <li><a href="{{ app_url }}/insights">Insights</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Invest</h4>
+        <ul>
+          <li><a href="{{ app_url }}/portfolio">Portfolio</a></li>
+          <li><a href="{{ app_url }}/register">Get Started</a></li>
+          <li><a href="{{ app_url }}/dashboard">Dashboard</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Legal</h4>
+        <ul>
+          <li><a href="#">Privacy Policy</a></li>
+          <li><a href="#">Terms of Service</a></li>
+          <li><a href="#">Risk Disclosure</a></li>
+        </ul>
+      </div>
+      <div class="footer-col">
+        <h4>Follow</h4>
+        <ul>
+          <li><a href="#">Twitter / X</a></li>
+          <li><a href="#">LinkedIn</a></li>
+          <li><a href="#">Telegram</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <p>&copy; {{ "now"|date("Y") }} {{ app_name }}. All rights reserved. Crypto investments involve risk.</p>
+  </div>
+</footer>
+
+<div class="cookie-banner" id="cookie-banner">
+  <p>We use cookies to improve your experience. <a href="#">Learn more</a>.</p>
+  <button class="btn btn-primary btn-sm" id="cookie-accept">Accept</button>
+</div>

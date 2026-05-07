@@ -1,0 +1,72 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Admin Dashboard — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set admin_page = 'dashboard' %}
+  {% include 'admin/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header">
+      <h1>Admin Dashboard</h1>
+      <span class="badge {% if xmrOnline %}badge-green{% else %}badge-red{% endif %}">AcceptXMR {% if xmrOnline %}Online{% else %}Offline{% endif %}</span>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card"><div class="kpi-label">Total Invested</div><div class="kpi-value">{{ totalInvested|format_usd }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Active Users</div><div class="kpi-value">{{ activeUsers }}</div></div>
+      <div class="kpi-card"><div class="kpi-label">Pending Payouts</div><div class="kpi-value kpi-warn">{{ pendingPayouts|format_usd }}</div></div>
+    </div>
+
+    {% if pendingPayoutList %}
+    <div class="dash-section">
+      <h2>Pending Withdrawal Requests</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>User</th><th>Amount</th><th>XMR Address</th><th>Requested</th><th>Actions</th></tr></thead>
+          <tbody>
+            {% for p in pendingPayoutList %}
+            <tr>
+              <td>{{ p.user_name }}<br><small>{{ p.email }}</small></td>
+              <td>{{ p.amount_usd|format_usd }}</td>
+              <td><code class="small">{{ p.destination_address|short_address }}</code></td>
+              <td>{{ p.created_at|time_ago }}</td>
+              <td class="actions">
+                <form method="POST" action="{{ app_url }}/admin/payouts/{{ p.id }}/approve" style="display:inline">
+                  {{ csrf_token|raw }}
+                  <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+                </form>
+                <form method="POST" action="{{ app_url }}/admin/payouts/{{ p.id }}/reject" style="display:inline" onsubmit="return confirm('Reject this payout?')">
+                  {{ csrf_token|raw }}
+                  <input type="hidden" name="note" value="Rejected by admin.">
+                  <button type="submit" class="btn btn-ghost btn-sm">Reject</button>
+                </form>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="dash-section">
+      <h2>Recent Audit Log</h2>
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>When</th><th>User</th><th>Action</th><th>Entity</th><th>IP</th></tr></thead>
+          <tbody>
+            {% for log in recentLogs %}
+            <tr>
+              <td>{{ log.created_at|time_ago }}</td>
+              <td>{{ log.user_name ?? '—' }}</td>
+              <td><code>{{ log.action }}</code></td>
+              <td>{{ log.entity_type }}{% if log.entity_id %} #{{ log.entity_id }}{% endif %}</td>
+              <td>{{ log.ip_address }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+{% endblock %}

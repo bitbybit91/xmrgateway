@@ -1,0 +1,29 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Login — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="auth-section">
+  <div class="auth-container">
+    <div class="auth-brand"><a href="{{ app_url }}/">{{ app_name }}</a></div>
+    <h1 class="auth-title">Welcome back</h1>
+    <p class="auth-sub">Sign in to your investment account</p>
+
+    {% if flash_error %}<div class="alert alert-error">{{ flash_error }}</div>{% endif %}
+    {% if flash_success %}<div class="alert alert-success">{{ flash_success }}</div>{% endif %}
+
+    <form method="POST" action="{{ app_url }}/login" class="auth-form">
+      {{ csrf_token|raw }}
+      <div class="form-group">
+        <label for="email">Email address</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="password">Password <a href="{{ app_url }}/forgot-password" class="form-link">Forgot?</a></label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required autocomplete="current-password">
+      </div>
+      <button type="submit" class="btn btn-primary btn-full">Sign In</button>
+    </form>
+
+    <p class="auth-switch">Don't have an account? <a href="{{ app_url }}/register">Create one</a></p>
+  </div>
+</section>
+{% endblock %}

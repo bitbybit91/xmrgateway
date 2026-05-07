@@ -1,0 +1,184 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}{{ app_name }} — Institutional Crypto Investments{% endblock %}
+
+{% block content %}
+
+<!-- ═══ HERO ═══════════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="hero-inner">
+    <div class="hero-content reveal">
+      <p class="hero-eyebrow">Est. 2013 · Institutional Grade</p>
+      <h1 class="hero-title">First institutional&#8209;grade<br>crypto investment<br>platform.</h1>
+      <p class="hero-sub">We build, launch, and manage transformative crypto investment strategies for accredited investors worldwide.</p>
+      <div class="hero-ctas">
+        <a href="{{ app_url }}/funds"     class="btn btn-primary btn-lg">Our Funds</a>
+        <a href="{{ app_url }}/portfolio" class="btn btn-outline btn-lg">Portfolio</a>
+        <a href="{{ app_url }}/insights"  class="btn btn-ghost btn-lg">Insights</a>
+      </div>
+    </div>
+    <div class="hero-ticker" id="price-ticker">
+      <div class="ticker-item"><span class="ticker-label">XMR</span><span class="ticker-price" id="price-xmr">—</span></div>
+      <div class="ticker-item"><span class="ticker-label">BTC</span><span class="ticker-price" id="price-btc">—</span></div>
+      <div class="ticker-item"><span class="ticker-label">ETH</span><span class="ticker-price" id="price-eth">—</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ AT A GLANCE ═══════════════════════════════════════════════════════ -->
+<section class="stats-section">
+  <div class="container">
+    <div class="stats-grid">
+      <div class="stat-card reveal">
+        <div class="stat-value" data-counter="{{ stats.aum }}">${{ (stats.aum / 1000000000)|number_format(1) }}B</div>
+        <div class="stat-label">Assets Under Management</div>
+      </div>
+      <div class="stat-card reveal">
+        <div class="stat-value">{{ stats.strategies }}</div>
+        <div class="stat-label">Investment Strategies</div>
+      </div>
+      <div class="stat-card reveal">
+        <div class="stat-value">{{ stats.investments }}+</div>
+        <div class="stat-label">Portfolio Companies</div>
+      </div>
+      <div class="stat-card reveal">
+        <div class="stat-value">{{ stats.countries }}+</div>
+        <div class="stat-label">Countries</div>
+      </div>
+      <div class="stat-card reveal">
+        <div class="stat-value">{{ stats.years }}+</div>
+        <div class="stat-label">Years in Crypto</div>
+      </div>
+      <div class="stat-card reveal">
+        <div class="stat-value">{{ plans|length }}</div>
+        <div class="stat-label">Active Strategies</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ HISTORY OF FIRSTS ═════════════════════════════════════════════════ -->
+<section class="timeline-section">
+  <div class="container">
+    <h2 class="section-title reveal">A history of firsts</h2>
+    <div class="timeline">
+      <div class="timeline-item reveal">
+        <div class="timeline-year">2013</div>
+        <div class="timeline-content"><h3>First institutional XMR fund</h3><p>Launched the world's first institutional-grade Monero investment vehicle.</p></div>
+      </div>
+      <div class="timeline-item reveal">
+        <div class="timeline-year">2016</div>
+        <div class="timeline-content"><h3>$1 Billion AUM milestone</h3><p>Crossed $1B in assets under management, validating the institutional crypto thesis.</p></div>
+      </div>
+      <div class="timeline-item reveal">
+        <div class="timeline-year">2018</div>
+        <div class="timeline-content"><h3>Early-Stage Token Fund launch</h3><p>Created the first structured vehicle for early-stage token investments.</p></div>
+      </div>
+      <div class="timeline-item reveal">
+        <div class="timeline-year">2020</div>
+        <div class="timeline-content"><h3>DeFi Integration</h3><p>Pioneered DeFi strategies for institutional clients seeking on-chain yield.</p></div>
+      </div>
+      <div class="timeline-item reveal">
+        <div class="timeline-year">2023</div>
+        <div class="timeline-content"><h3>350+ portfolio companies</h3><p>Expanded our venture portfolio to over 350 blockchain and Web3 companies.</p></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ INVESTMENT TYPES ═══════════════════════════════════════════════════ -->
+<section class="types-section">
+  <div class="container">
+    <h2 class="section-title reveal">Three ways to invest</h2>
+    <div class="types-grid">
+      <div class="type-card reveal">
+        <div class="type-icon">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="24" cy="24" r="20" stroke="currentColor" stroke-width="2"/><path d="M16 32l8-16 8 16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </div>
+        <h3>Venture Equity</h3>
+        <p>Equity stakes in early-stage blockchain companies vetted by our research team. Long-horizon, high-upside positions.</p>
+        <div class="type-stats">
+          <span class="badge">Up to 0.25% daily</span>
+          <span class="badge">180-day term</span>
+        </div>
+        <a href="{{ app_url }}/register" class="btn btn-outline">Invest Now</a>
+      </div>
+      <div class="type-card type-card--featured reveal">
+        <div class="type-icon">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><rect x="8" y="16" width="32" height="20" rx="2" stroke="currentColor" stroke-width="2"/><path d="M16 16v-4a8 8 0 0116 0v4" stroke="currentColor" stroke-width="2"/></svg>
+        </div>
+        <h3>Early-Stage Tokens</h3>
+        <p>Pre-listing access to curated token projects with strong fundamentals and active development communities.</p>
+        <div class="type-stats">
+          <span class="badge">Up to 0.15% daily</span>
+          <span class="badge">90-day term</span>
+        </div>
+        <a href="{{ app_url }}/register" class="btn btn-primary">Invest Now</a>
+      </div>
+      <div class="type-card reveal">
+        <div class="type-icon">
+          <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M8 24h32M24 8v32" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="24" cy="24" r="16" stroke="currentColor" stroke-width="2"/></svg>
+        </div>
+        <h3>Liquid Tokens</h3>
+        <p>A diversified basket of top-100 crypto assets, actively managed for risk-adjusted returns with daily liquidity.</p>
+        <div class="type-stats">
+          <span class="badge">Up to 0.08% daily</span>
+          <span class="badge">30-day term</span>
+        </div>
+        <a href="{{ app_url }}/register" class="btn btn-outline">Invest Now</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ ACTIVE PLANS ═══════════════════════════════════════════════════════ -->
+{% if plans %}
+<section class="plans-section">
+  <div class="container">
+    <h2 class="section-title reveal">Active Investment Plans</h2>
+    <div class="plans-grid">
+      {% for plan in plans %}
+      <div class="plan-card reveal">
+        <div class="plan-type-badge">{{ plan.type|replace({'_': ' '})|title }}</div>
+        <h3 class="plan-name">{{ plan.name }}</h3>
+        <p class="plan-desc">{{ plan.description }}</p>
+        <div class="plan-roi">{{ plan.daily_roi_percent }}% <small>daily ROI</small></div>
+        <div class="plan-details">
+          <span>{{ plan.duration_days }} days</span>
+          <span>Min: ${{ plan.min_amount_usd|number_format(0) }}</span>
+          <span>Max: ${{ plan.max_amount_usd|number_format(0) }}</span>
+        </div>
+        <a href="{{ app_url }}/register" class="btn btn-primary">Start Investing</a>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+</section>
+{% endif %}
+
+<!-- ═══ NEWSLETTER ═════════════════════════════════════════════════════════ -->
+<section class="newsletter-section">
+  <div class="container">
+    <div class="newsletter-inner reveal">
+      <h2>Stay ahead of the market</h2>
+      <p>Get our weekly crypto market analysis and investment insights delivered to your inbox.</p>
+      <form class="newsletter-form" id="newsletter-form">
+        <input type="email" name="email" placeholder="Your email address" required>
+        <button type="submit" class="btn btn-primary">Subscribe</button>
+      </form>
+      <p class="newsletter-msg" id="newsletter-msg"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ CTA SECTION ════════════════════════════════════════════════════════ -->
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-inner reveal">
+      <h2>Ready to invest with the best?</h2>
+      <p>Join thousands of investors who trust us with their crypto portfolio.</p>
+      <a href="{{ app_url }}/register" class="btn btn-primary btn-lg">Open Your Account</a>
+    </div>
+  </div>
+</section>
+
+{% endblock %}

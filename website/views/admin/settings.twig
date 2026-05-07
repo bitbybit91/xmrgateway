@@ -1,0 +1,34 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Settings — Admin{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set admin_page = 'settings' %}
+  {% include 'admin/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header"><h1>Site Settings</h1></div>
+    {% if flash_success %}<div class="alert alert-success">{{ flash_success }}</div>{% endif %}
+    <div class="dash-section">
+      <form method="POST" action="{{ app_url }}/admin/settings" class="settings-form">
+        {{ csrf_token|raw }}
+        <div class="form-row">
+          <div class="form-group"><label>Site Name</label><input type="text" name="site_name" value="{{ settings.site_name ?? '' }}"></div>
+          <div class="form-group"><label>Contact Email</label><input type="email" name="contact_email" value="{{ settings.contact_email ?? '' }}"></div>
+        </div>
+        <div class="form-group"><label>Site Tagline</label><input type="text" name="site_tagline" value="{{ settings.site_tagline ?? '' }}"></div>
+        <div class="form-row">
+          <div class="form-group"><label>AUM (USD, number)</label><input type="number" name="aum_usd" value="{{ settings.aum_usd ?? '' }}"></div>
+          <div class="form-group"><label>Total Strategies</label><input type="number" name="total_strategies" value="{{ settings.total_strategies ?? '' }}"></div>
+          <div class="form-group"><label>Total Investments</label><input type="number" name="total_investments" value="{{ settings.total_investments ?? '' }}"></div>
+          <div class="form-group"><label>Total Countries</label><input type="number" name="total_countries" value="{{ settings.total_countries ?? '' }}"></div>
+        </div>
+        <div class="form-group"><label>Accent Color</label><input type="color" name="accent_color" value="{{ settings.accent_color ?? '#C9A227' }}"></div>
+        <button type="submit" class="btn btn-primary">Save Settings</button>
+      </form>
+    </div>
+    <div class="dash-section">
+      <h2>Newsletter</h2>
+      <a href="{{ app_url }}/admin/newsletter/export" class="btn btn-outline">Export Subscribers CSV</a>
+    </div>
+  </main>
+</div>
+{% endblock %}

@@ -1,0 +1,28 @@
+<nav class="nav" id="main-nav">
+  <div class="nav-inner">
+    <a href="{{ app_url }}/" class="nav-logo">
+      <span class="nav-logo-name">{{ app_name }}</span>
+    </a>
+    <button class="nav-hamburger" id="hamburger" aria-label="Menu">
+      <span></span><span></span><span></span>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="{{ app_url }}/">Home</a></li>
+      <li><a href="{{ app_url }}/funds">Funds</a></li>
+      <li><a href="{{ app_url }}/portfolio">Portfolio</a></li>
+      <li><a href="{{ app_url }}/insights">Insights</a></li>
+      <li><a href="{{ app_url }}/about">About</a></li>
+    </ul>
+    <div class="nav-actions">
+      {% if current_user %}
+        <a href="{{ app_url }}/dashboard" class="btn btn-outline">Dashboard</a>
+        {% if current_user.role == 'admin' %}
+          <a href="{{ app_url }}/admin" class="btn btn-primary">Admin</a>
+        {% endif %}
+      {% else %}
+        <a href="{{ app_url }}/login" class="btn btn-outline">Login</a>
+        <a href="{{ app_url }}/register" class="btn btn-primary">Get Started</a>
+      {% endif %}
+    </div>
+  </div>
+</nav>

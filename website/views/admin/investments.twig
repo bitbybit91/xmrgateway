@@ -1,0 +1,35 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Investments — Admin{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set admin_page = 'investments' %}
+  {% include 'admin/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header"><h1>All Investments</h1></div>
+    <form class="filter-bar" method="GET">
+      <select name="status"><option value="">All</option><option value="pending_payment" {% if status=='pending_payment' %}selected{% endif %}>Pending Payment</option><option value="active" {% if status=='active' %}selected{% endif %}>Active</option><option value="matured" {% if status=='matured' %}selected{% endif %}>Matured</option><option value="withdrawn" {% if status=='withdrawn' %}selected{% endif %}>Withdrawn</option><option value="cancelled" {% if status=='cancelled' %}selected{% endif %}>Cancelled</option></select>
+      <button type="submit" class="btn btn-primary btn-sm">Filter</button>
+    </form>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>User</th><th>Plan</th><th>Amount</th><th>ROI</th><th>Status</th><th>Created</th></tr></thead>
+        <tbody>
+          {% for inv in investments %}
+          <tr>
+            <td>{{ inv.id }}</td>
+            <td>{{ inv.user_name }}<br><small>{{ inv.email }}</small></td>
+            <td>{{ inv.plan_name }}</td>
+            <td>{{ inv.amount_usd|format_usd }}</td>
+            <td class="text-green">{{ inv.total_roi_usd|format_usd }}</td>
+            <td><span class="status-badge status-{{ inv.status }}">{{ inv.status|replace({'_':' '})|title }}</span></td>
+            <td>{{ inv.created_at|date('M j, Y') }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center">No investments found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+{% endblock %}

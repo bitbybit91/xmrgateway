@@ -1,0 +1,40 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Register — {{ app_name }}{% endblock %}
+{% block content %}
+<section class="auth-section">
+  <div class="auth-container">
+    <div class="auth-brand"><a href="{{ app_url }}/">{{ app_name }}</a></div>
+    <h1 class="auth-title">Create your account</h1>
+    <p class="auth-sub">Start investing in institutional-grade crypto strategies</p>
+
+    {% if flash_error %}<div class="alert alert-error">{{ flash_error }}</div>{% endif %}
+
+    <form method="POST" action="{{ app_url }}/register" class="auth-form">
+      {{ csrf_token|raw }}
+      <div class="form-group">
+        <label for="name">Full Name</label>
+        <input type="text" id="name" name="name" placeholder="John Smith" required autocomplete="name">
+      </div>
+      <div class="form-group">
+        <label for="email">Email Address</label>
+        <input type="email" id="email" name="email" placeholder="you@example.com" required autocomplete="email">
+      </div>
+      <div class="form-group">
+        <label for="password">Password <small>(min 8 characters)</small></label>
+        <input type="password" id="password" name="password" placeholder="••••••••" required minlength="8">
+      </div>
+      <div class="form-group">
+        <label for="password_confirmation">Confirm Password</label>
+        <input type="password" id="password_confirmation" name="password_confirmation" placeholder="••••••••" required>
+      </div>
+      <div class="form-group form-check">
+        <input type="checkbox" id="terms" name="terms" required>
+        <label for="terms">I agree to the <a href="#">Terms of Service</a> and <a href="#">Risk Disclosure</a></label>
+      </div>
+      <button type="submit" class="btn btn-primary btn-full">Create Account</button>
+    </form>
+
+    <p class="auth-switch">Already have an account? <a href="{{ app_url }}/login">Sign in</a></p>
+  </div>
+</section>
+{% endblock %}

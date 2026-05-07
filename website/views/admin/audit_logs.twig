@@ -1,0 +1,35 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Audit Logs — Admin{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set admin_page = 'audit' %}
+  {% include 'admin/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header"><h1>Audit Logs</h1></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Entity</th><th>IP</th></tr></thead>
+        <tbody>
+          {% for log in logs %}
+          <tr>
+            <td>{{ log.created_at|date('M j H:i') }}</td>
+            <td>{{ log.user_name ?? '—' }}</td>
+            <td><code>{{ log.action }}</code></td>
+            <td>{{ log.entity_type }}{% if log.entity_id %} #{{ log.entity_id }}{% endif %}</td>
+            <td>{{ log.ip_address }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="text-center">No logs found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if page > 1 or logs|length == 50 %}
+    <div class="pagination">
+      {% if page > 1 %}<a href="?page={{ page - 1 }}" class="btn btn-outline btn-sm">← Previous</a>{% endif %}
+      {% if logs|length == 50 %}<a href="?page={{ page + 1 }}" class="btn btn-outline btn-sm">Next →</a>{% endif %}
+    </div>
+    {% endif %}
+  </main>
+</div>
+{% endblock %}

@@ -1,0 +1,94 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}History — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set active_page = 'history' %}
+  {% include 'dashboard/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header"><h1>Transaction History</h1></div>
+
+    <div class="tabs" id="history-tabs">
+      <button class="tab-btn active" data-tab="investments">Investments</button>
+      <button class="tab-btn" data-tab="transactions">Transactions</button>
+      <button class="tab-btn" data-tab="payouts">Payouts</button>
+    </div>
+
+    <div class="tab-pane active" id="tab-investments">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Plan</th><th>Amount</th><th>ROI Earned</th><th>Start</th><th>End</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for inv in investments %}
+            <tr>
+              <td>{{ inv.plan_name }}</td>
+              <td>{{ inv.amount_usd|format_usd }}</td>
+              <td class="text-green">{{ inv.total_roi_usd|format_usd }}</td>
+              <td>{{ inv.start_date ? inv.start_date|date('M j, Y') : '—' }}</td>
+              <td>{{ inv.end_date  ? inv.end_date|date('M j, Y')  : '—' }}</td>
+              <td><span class="status-badge status-{{ inv.status }}">{{ inv.status|replace({'_': ' '})|title }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center">No investments yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-pane" id="tab-transactions" style="display:none">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Date</th><th>Type</th><th>USD</th><th>XMR</th><th>Invoice ID</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for tx in transactions %}
+            <tr>
+              <td>{{ tx.created_at|date('M j, Y H:i') }}</td>
+              <td><span class="tx-type tx-{{ tx.type }}">{{ tx.type|title }}</span></td>
+              <td>{{ tx.amount_usd|format_usd }}</td>
+              <td>{{ tx.amount_xmr|format_xmr }}</td>
+              <td><code class="small">{{ tx.acceptxmr_invoice_id ?? '—' }}</code></td>
+              <td><span class="status-badge status-{{ tx.status }}">{{ tx.status|title }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="text-center">No transactions yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="tab-pane" id="tab-payouts" style="display:none">
+      <div class="table-wrap">
+        <table class="data-table">
+          <thead><tr><th>Date</th><th>Amount</th><th>Address</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for p in payouts %}
+            <tr>
+              <td>{{ p.created_at|date('M j, Y') }}</td>
+              <td>{{ p.amount_usd|format_usd }}</td>
+              <td><code class="small">{{ p.destination_address|short_address }}</code></td>
+              <td><span class="status-badge status-{{ p.status }}">{{ p.status|title }}</span></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="4" class="text-center">No withdrawal requests yet.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.style.display = 'none');
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).style.display = '';
+  });
+});
+</script>
+{% endblock %}

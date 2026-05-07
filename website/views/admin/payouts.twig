@@ -1,0 +1,43 @@
+{% extends 'layouts/base.twig' %}
+{% block title %}Payouts — Admin{% endblock %}
+{% block content %}
+<div class="dash-layout">
+  {% set admin_page = 'payouts' %}
+  {% include 'admin/partials/sidebar.twig' %}
+  <main class="dash-main">
+    <div class="dash-header"><h1>Payout Requests</h1></div>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>ID</th><th>User</th><th>Amount</th><th>Address</th><th>Status</th><th>Requested</th><th>Actions</th></tr></thead>
+        <tbody>
+          {% for p in payouts %}
+          <tr>
+            <td>{{ p.id }}</td>
+            <td>{{ p.user_name }}<br><small>{{ p.email }}</small></td>
+            <td>{{ p.amount_usd|format_usd }}</td>
+            <td><code class="small">{{ p.destination_address|short_address }}</code></td>
+            <td><span class="status-badge status-{{ p.status }}">{{ p.status|title }}</span></td>
+            <td>{{ p.created_at|date('M j, Y') }}</td>
+            <td>
+              {% if p.status == 'pending' %}
+              <form method="POST" action="{{ app_url }}/admin/payouts/{{ p.id }}/approve" style="display:inline">
+                {{ csrf_token|raw }}
+                <button type="submit" class="btn btn-primary btn-sm">Approve</button>
+              </form>
+              <form method="POST" action="{{ app_url }}/admin/payouts/{{ p.id }}/reject" style="display:inline">
+                {{ csrf_token|raw }}
+                <input type="hidden" name="note" value="Rejected by admin.">
+                <button type="submit" class="btn btn-ghost btn-sm" onclick="return confirm('Reject?')">Reject</button>
+              </form>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="7" class="text-center">No payouts found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </main>
+</div>
+{% endblock %}

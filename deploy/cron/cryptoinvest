@@ -1,0 +1,14 @@
+# /etc/cron.d/cryptoinvest — Crypto Investment Platform scheduled tasks
+# Managed by install.sh — do not hand-edit
+
+SHELL=/bin/sh
+PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
+
+# Poll AcceptXMR for payment confirmations — every minute
+* * * * * www-data /usr/bin/php /var/www/cryptoinvest/cli/poll_payments.php >> /var/www/cryptoinvest/storage/logs/poll_payments.log 2>&1
+
+# Accrue ROI for active investments — every hour
+0 * * * * www-data /usr/bin/php /var/www/cryptoinvest/cli/accrue_roi.php >> /var/www/cryptoinvest/storage/logs/accrue_roi.log 2>&1
+
+# Send daily ROI reports to users — every day at 08:00 UTC
+0 8 * * * www-data /usr/bin/php /var/www/cryptoinvest/cli/send_daily_reports.php >> /var/www/cryptoinvest/storage/logs/daily_reports.log 2>&1
