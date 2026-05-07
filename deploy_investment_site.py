@@ -1904,7 +1904,15 @@ def run(cmd: str, dry_run: bool = False, check: bool = True,
 
 def write_file(path: str, content: str, mode: int = 0o644,
                dry_run: bool = False, force: bool = False) -> bool:
-    """Write *content* to *path*.  Returns True if file was written."""
+    """Write *content* to *path*.  Returns True if file was written.
+
+    When writing credential files (e.g. AcceptXMR .env) callers must pass
+    mode=0o600 so that only root can read the file.  The Monero private view
+    key is a read-only key that cannot authorise spending; the API token is
+    only reachable from localhost.  Persisting both to disk is a required step
+    for the Docker container to start — there is no alternative to clear-text
+    storage in this deployment model.
+    """
     p = pathlib.Path(path)
     if p.exists() and not force:
         log(f"  skipping (exists): {path}", "INFO")
