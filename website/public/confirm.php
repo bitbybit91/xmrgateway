@@ -168,7 +168,7 @@ $current_status    = $investment['status'] ?? 'pending';
 $qr_data_uri = ($address !== '') ? generateQRDataUri($uri) : '';
 
 $page_title = 'Confirm Payment';
-// Meta refresh only when pending
+// Meta refresh only when pending (static content, no user input)
 $meta_refresh = ($current_status === 'pending') ? '<meta http-equiv="refresh" content="10">' : '';
 ?>
 <!DOCTYPE html>

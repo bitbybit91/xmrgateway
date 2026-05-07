@@ -27,13 +27,14 @@ try {
     exit(1);
 }
 
-// Fetch pending investments not older than 24 hours
+// Fetch pending investments not older than 24 hours (batch of 100 to avoid memory issues)
 $stmt = $pdo->prepare(
     "SELECT i.id, i.acceptxmr_invoice_id, i.amount_xmr, i.user_id, i.fund_id, i.confirmations
      FROM investments i
      WHERE i.status = 'pending'
        AND i.created_at >= DATE_SUB(NOW(), INTERVAL 24 HOUR)
-     ORDER BY i.created_at ASC"
+     ORDER BY i.created_at ASC
+     LIMIT 100"
 );
 $stmt->execute();
 $investments = $stmt->fetchAll(PDO::FETCH_ASSOC);

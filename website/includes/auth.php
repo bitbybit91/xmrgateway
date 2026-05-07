@@ -4,10 +4,12 @@ require_once __DIR__ . '/db.php';
 
 function auth_start_session(): void {
     if (session_status() === PHP_SESSION_NONE) {
+        $is_https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off')
+            || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
         session_set_cookie_params([
             'lifetime' => 3600,
             'path'     => '/',
-            'secure'   => true,
+            'secure'   => $is_https,
             'httponly' => true,
             'samesite' => 'Strict',
         ]);
@@ -89,8 +91,8 @@ function auth_login(PDO $pdo, string $email, string $password): array|false {
     $user = $stmt->fetch();
 
     if (!$user) {
-        // Timing-safe: still run verify to prevent user enumeration
-        password_verify($password, '$argon2id$v=19$m=65536,t=4,p=1$fakesalt$fakehash');
+        // Timing-safe: still run verify to prevent user enumeration timing attacks
+        password_verify($password, '$argon2id$v=19$m=65536,t=4,p=1$c29tZXNhbHRzb21lc2FsdA$YWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWFhYWE');
         return false;
     }
 

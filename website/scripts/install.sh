@@ -163,8 +163,8 @@ fi
 echo ""
 info "Configuring MariaDB..."
 
-# Generate random password
-DB_PASS=$(openssl rand -base64 32 | tr -dc 'A-Za-z0-9' | head -c 32)
+# Generate random password (use larger entropy source to ensure 32 chars after filtering)
+DB_PASS=$(openssl rand -base64 48 | tr -dc 'A-Za-z0-9' | head -c 32)
 DB_NAME="cryptoinvest"
 DB_USER="cryptoinvest"
 
