@@ -1769,7 +1769,7 @@ $posts = [
         'slug'    => '#privacy-matters',
     ],
     [
-        'title'   => 'Understanding Monero\'s Ring Signatures',
+        'title'   => "Understanding Monero's Ring Signatures",
         'date'    => 'February 3, 2025',
         'excerpt' => 'A deep dive into the cryptographic primitives that make Monero the gold standard of financial privacy: ring signatures, stealth addresses, and RingCT explained in plain English.',
         'slug'    => '#ring-signatures',
