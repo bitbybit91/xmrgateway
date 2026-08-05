@@ -95,3 +95,60 @@ viable to work on.
 
 XMR:
 `82assiV5dy7guoxxV7vSReZTyY5rGMrWg6BsfvFqiEKRcTiDs7LGMpg5dF5gXVGUWPEXQxyt8SNYx8L8HiGAzvtBK3eJ3EY`
+
+---
+
+## `win_site_cloner.py` — Offline Site Cloner with PHP/MySQL Backend & Tor Support
+
+A self-contained Python 3.8+ script (`win_site_cloner.py`) that clones any website
+for offline use and, optionally, generates a fully functional PHP + MySQL backend with
+a Monero deposit/withdrawal wallet wired to `monero-wallet-rpc`.
+
+### Modes
+
+| Mode | Description |
+|------|-------------|
+| `static` (default) | JS-free static HTML mirror |
+| `dynamic` | PHP + MySQL backend with wallet, shop, dashboard, orders, settings |
+| `onion` | Route all requests through a Tor SOCKS5 proxy; supports `.onion` URLs |
+
+### Flags
+
+```
+--mode {static,dynamic,onion}    Cloning mode (default: static)
+--keep-js                        Preserve JavaScript in output
+--tor-proxy URL                  Tor proxy (default: socks5h://127.0.0.1:9050)
+--db-host / --db-name / --db-user / --db-pass   Seed config.php DB defaults
+--admin-user / --admin-pass      Seed admin credentials for install.php
+--max-depth INT                  Crawl depth (default: 3)
+--max-pages INT                  Max pages to fetch (default: 200)
+--zip                            Package output into a .zip archive
+--skip-deps                      Skip auto-installing Python dependencies
+```
+
+### Quick Start
+
+```bash
+# Static mirror (default)
+python win_site_cloner.py --url https://example.com --output ./mirror
+
+# PHP/MySQL shop + XMR wallet
+python win_site_cloner.py --url https://example.com --output ./shop --mode dynamic \
+  --admin-pass strong_password
+
+# Tor hidden service with JS
+python win_site_cloner.py --url http://example.onion --output ./onion \
+  --mode onion --keep-js
+```
+
+### Dynamic Mode — Generated Files
+
+- `config.php` — DB + XMR RPC credentials (reads env vars, no hardcoded secrets)
+- `schema.sql` — Full DB schema (users, sessions, products, orders, deposits, withdrawals)
+- `install.php` — One-shot installer (delete after use)
+- `xmrgateway_client.php` — `monero-wallet-rpc` JSON-RPC client (digest auth)
+- `cron_poll_deposits.php` — Deposit poller (run every 2 min)
+- `wallet.php`, `dashboard.php`, `orders.php`, `products.php`, `settings.php`
+- `login.php`, `register.php`, `logout.php`
+
+See the generated `README_BACKEND.md` in the output directory for full setup instructions.
