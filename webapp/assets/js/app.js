@@ -73,12 +73,19 @@ async function wireConversionInput(inputId, convDisplayId, coinSelectId) {
     }
 
     if (coinAmt === null || usd === 0) {
-      convDisplay.innerHTML = '<span class="text-muted">Enter an amount above</span>';
+      convDisplay.textContent = 'Enter an amount above';
     } else {
-      const rateStr = rate ? formatUsd(rate) : '—';
-      convDisplay.innerHTML =
-        `<span class="coin-amount">${coinAmt} ${coin}</span>` +
-        `<div class="rate-note">1 ${coin} = ${rateStr} USD &nbsp;·&nbsp; via CoinGecko</div>`;
+      const rateStr = rate ? formatUsd(rate) : '\u2014';
+      // Build DOM nodes instead of using innerHTML to avoid XSS
+      const amtEl = document.createElement('span');
+      amtEl.className = 'coin-amount';
+      amtEl.textContent = `${coinAmt} ${coin}`;
+
+      const rateEl = document.createElement('div');
+      rateEl.className = 'rate-note';
+      rateEl.textContent = `1 ${coin} = ${rateStr} USD \u00b7 via CoinGecko`;
+
+      convDisplay.replaceChildren(amtEl, rateEl);
     }
   }
 
