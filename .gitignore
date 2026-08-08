@@ -1,2 +1,5 @@
 /target
 AcceptXMR_DB
+/dist
+/node_modules
+config/crypto.config.json

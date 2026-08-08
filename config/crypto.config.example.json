@@ -1,0 +1,15 @@
+{
+  "xmr": {
+    "primaryAddress": "REPLACE_WITH_YOUR_XMR_PRIMARY_ADDRESS",
+    "viewKey": "REPLACE_WITH_YOUR_XMR_PRIVATE_VIEW_KEY",
+    "restoreHeight": 0
+  },
+  "btc": {
+    "receivingAddress": "REPLACE_WITH_YOUR_BTC_ADDRESS",
+    "network": "mainnet"
+  },
+  "acceptxmr": {
+    "daemonUrl": "http://node.example.com:18081",
+    "scanInterval": 1000
+  }
+}

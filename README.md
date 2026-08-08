@@ -15,6 +15,68 @@ For a batteries-included payment gateway, see
 For a slim & performant library to use in your rust applications, see
 [`AcceptXMR`](./library/).
 
+## Static Frontend
+
+In addition to the full Rust server, this repository ships a **static site
+generator** that builds a self-contained frontend into `dist/` using only
+Node.js. The generated files can be served by any static file host (GitHub
+Pages, Nginx, Caddy, `python3 -m http.server`, etc.) without a running Rust
+process.
+
+### Quick Start
+
+**1. Configure your crypto addresses**
+
+```bash
+cp config/crypto.config.example.json config/crypto.config.json
+```
+
+Open `config/crypto.config.json` and replace the placeholder values:
+
+```json
+{
+  "xmr": {
+    "primaryAddress": "<your XMR primary address starting with 4>",
+    "viewKey": "<your 64-char hex private view key>",
+    "restoreHeight": 0
+  },
+  "btc": {
+    "receivingAddress": "<your BTC address>",
+    "network": "mainnet"
+  },
+  "acceptxmr": {
+    "daemonUrl": "https://your-monerod-node:18081",
+    "scanInterval": 1000
+  }
+}
+```
+
+> **Security:** `config/crypto.config.json` is listed in `.gitignore` and must
+> never be committed. The private view key is used only at build time for
+> validation and is never written to the generated output.
+
+**2. Build**
+
+```bash
+npm run build
+```
+
+The build script validates all addresses and fails with a clear error message if
+anything is wrong. On success it writes the `dist/` directory.
+
+**3. Serve**
+
+```bash
+# Any of the following work:
+npx serve dist/
+python3 -m http.server --directory dist 8080
+# Or point Nginx / Caddy / GitHub Pages at the dist/ folder.
+```
+
+The `dist/config.js` file exposes your (browser-safe) configuration as
+`window.CRYPTO_CONFIG` so the frontend JavaScript can reference your addresses
+without any server-side rendering.
+
 ## Key Advantages
 * View pair only, no hot wallet.
 * Subaddress based. 
