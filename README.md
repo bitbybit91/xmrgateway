@@ -1,5 +1,257 @@
 [![BuildStatus](https://github.com/busyboredom/acceptxmr/workflows/CI/badge.svg)](https://img.shields.io/github/actions/workflow/status/busyboredom/acceptxmr/ci.yml?branch=main)
 
+# XMR Gateway Capital — Investment Platform
+
+This repository contains two things:
+
+1. **A crypto investment website** (`webapp/`) — a PHP + MySQL website where users can register, deposit Monero (XMR) or Bitcoin (BTC), invest in managed funds, and request withdrawals. Prices are pulled live from CoinGecko.
+2. **The AcceptXMR library and server** (`library/`, `server/`) — the underlying Rust payment-processing engine.
+
+---
+
+## Plain-English Quick-Start: Investment Website
+
+### What You Need Before Starting
+
+- A web server running **PHP 8.1 or newer** (Apache, Nginx, or anything similar)
+- A **MySQL 8** database server
+- **Composer** is not required — there are no PHP dependencies to install
+- Your **XMR primary address** and **BTC receiving address** (from your wallet)
+- Basic comfort with copy-pasting terminal commands
+
+---
+
+### Step 1 — Download or Clone the Code
+
+If you have Git installed, open a terminal and run:
+
+```bash
+git clone https://github.com/bitbybit91/xmrgateway.git
+cd xmrgateway
+```
+
+If you don't have Git, download the ZIP from GitHub and unzip it.
+
+---
+
+### Step 2 — Create the MySQL Database
+
+Log into MySQL (replace `root` with your MySQL username if different):
+
+```bash
+mysql -u root -p
+```
+
+Then inside MySQL:
+
+```sql
+CREATE DATABASE xmrgateway CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'xmr_app'@'localhost' IDENTIFIED BY 'PICK_A_STRONG_PASSWORD_HERE';
+GRANT ALL PRIVILEGES ON xmrgateway.* TO 'xmr_app'@'localhost';
+FLUSH PRIVILEGES;
+EXIT;
+```
+
+Now import the schema (tables + sample fund data):
+
+```bash
+mysql -u root -p xmrgateway < webapp/db/schema.sql
+```
+
+---
+
+### Step 3 — Configure the Database Connection
+
+Copy the example database config:
+
+```bash
+cp webapp/config/db.php webapp/config/db.local.php
+```
+
+Open `webapp/config/db.local.php` in any text editor and change these four lines to match your MySQL setup:
+
+```php
+define('DB_HOST', '127.0.0.1');
+define('DB_NAME', 'xmrgateway');
+define('DB_USER', 'xmr_app');
+define('DB_PASS', 'PICK_A_STRONG_PASSWORD_HERE');  // same password as Step 2
+```
+
+> `db.local.php` is listed in `.gitignore` — it will never be committed and your password stays safe.
+
+---
+
+### Step 4 — Set Your Crypto Receiving Addresses
+
+Copy the example config:
+
+```bash
+cp config/crypto.config.example.json config/crypto.config.json
+```
+
+Open `config/crypto.config.json` and fill in your own values:
+
+```json
+{
+  "xmr": {
+    "primaryAddress": "4YourXMRAddressHere...",
+    "viewKey": "yourPrivateViewKey64HexChars",
+    "restoreHeight": 0
+  },
+  "btc": {
+    "receivingAddress": "bc1YourBTCAddressHere",
+    "network": "mainnet"
+  },
+  "acceptxmr": {
+    "daemonUrl": "https://your-monero-node:18081",
+    "scanInterval": 1000
+  }
+}
+```
+
+**Tips:**
+- Your **XMR primary address** starts with a `4` and is about 95 characters long. Find it in your Monero wallet.
+- Your **private view key** is 64 hex characters. In Feather Wallet: Wallet → View Key.
+- Your **BTC receiving address** is from your Bitcoin wallet (starts with `1`, `3`, or `bc1`).
+- The `daemonUrl` is the address of a Monero node. Public ones: `https://xmr-node.cakewallet.com:18081` or `https://nodes.hashvault.pro:18081`.
+
+> `config/crypto.config.json` is gitignored — your keys are safe.
+
+---
+
+### Step 5 — Point Your Web Server at `webapp/`
+
+**Apache example** — add to your virtual host or `.htaccess`:
+
+```apache
+DocumentRoot /path/to/xmrgateway/webapp
+DirectoryIndex index.php
+```
+
+Make sure `mod_rewrite` is enabled if you want clean URLs (optional).
+
+**Nginx example:**
+
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com;
+    root /path/to/xmrgateway/webapp;
+    index index.php;
+
+    location ~ \.php$ {
+        fastcgi_pass unix:/run/php/php8.3-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
+    }
+}
+```
+
+**Local testing** — PHP has a built-in server, great for trying things out:
+
+```bash
+cd webapp
+php -S localhost:8080
+```
+
+Then open `http://localhost:8080` in your browser.
+
+---
+
+### Step 6 — Open the Website
+
+Go to your site in a browser. You should see:
+
+- The **landing page** with all four investment funds listed.
+- An **Open Account** button — create a user to test login and dashboard.
+- The **dashboard** lets you (when you fill it in) deposit, invest, and withdraw.
+
+---
+
+### How the Investment Flow Works
+
+1. **Register / Log in** — any email + password (8 chars minimum).
+2. **Deposit** — choose XMR or BTC, enter a USD amount. The system fetches the live price from CoinGecko and tells you the exact coin amount to send. Send it to the displayed address. An admin confirms the deposit and credits your USD balance.
+3. **Invest** — once you have a USD balance, pick a fund and invest between **$250 and $1,000,000**.
+4. **Withdraw** — request a withdrawal in XMR or BTC. The USD is deducted instantly; an admin processes the crypto transfer within 24 hours.
+
+---
+
+### CoinGecko Pricing
+
+Prices are fetched from the **CoinGecko free public API** — no API key needed. Results are cached for 60 seconds to avoid rate limits. If CoinGecko is temporarily unavailable, the last cached price is used.
+
+---
+
+### File Layout
+
+```
+webapp/
+├── index.php                  ← Landing page with fund listings
+├── api/
+│   └── prices.php             ← CoinGecko price proxy (called by JS)
+├── auth/
+│   ├── login.php
+│   ├── register.php
+│   └── logout.php
+├── config/
+│   ├── app.php                ← Site settings, crypto addresses, limits
+│   ├── db.php                 ← Database credentials template
+│   └── db.local.php           ← Your real credentials (gitignored, you create this)
+├── dashboard/
+│   ├── index.php              ← Account overview
+│   ├── deposit.php            ← Create a deposit
+│   ├── withdraw.php           ← Request a withdrawal
+│   └── invest.php             ← Invest in a fund
+├── db/
+│   └── schema.sql             ← Run once to create all tables + seed funds
+├── includes/
+│   ├── auth_guard.php         ← Login check + CSRF helpers
+│   ├── header.php             ← Navigation bar
+│   └── footer.php             ← Footer + JS includes
+└── assets/
+    ├── css/style.css          ← Dark finance theme (Bootstrap 5 customisation)
+    └── js/app.js              ← CoinGecko conversion, live price display
+```
+
+---
+
+### Security Notes
+
+- Passwords are hashed with **bcrypt** (cost 12).
+- All forms are protected with **CSRF tokens**.
+- User input is escaped with `htmlspecialchars()` before display.
+- Database queries use **PDO prepared statements** — SQL injection is not possible.
+- Session cookies are `HttpOnly` and `SameSite=Strict`.
+- Your private view key and database password are **never committed** to Git.
+
+---
+
+### Frequently Asked Questions
+
+**Do I need to install Composer or npm?**
+No. The investment website uses no PHP dependencies and includes Bootstrap via CDN.
+
+**Is this ready for production?**
+It is a complete, working foundation. Before going live you should:
+- Enable HTTPS (get a free cert from [Let's Encrypt](https://letsencrypt.org/)).
+- Set a strong `APP_SECRET` in `webapp/config/app.php`.
+- Add an admin interface to manually confirm deposits and approve withdrawals.
+- Consider restricting `webapp/config/` from web access (place config outside webroot or deny via server config).
+
+**How do I add more funds?**
+Insert a row into the `funds` table in MySQL:
+
+```sql
+INSERT INTO funds (slug, name, description, strategy, target_return, risk_level)
+VALUES ('my-fund', 'My New Fund', 'Description here', 'Strategy here', '20 % p.a.', 'Medium');
+```
+
+**The prices show "—" instead of numbers.**
+The browser calls `/api/prices.php` which proxies CoinGecko. If it fails, check that PHP can make outbound HTTP requests (`allow_url_fopen = On` in `php.ini`), or that your server is not blocking outbound connections.
+
+---
+
 # `AcceptXMR`: Accept Monero in Your Application
 `AcceptXMR` aims to provide a simple, reliable, and efficient means to track
 monero payments.

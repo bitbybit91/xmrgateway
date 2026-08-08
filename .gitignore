@@ -3,3 +3,4 @@ AcceptXMR_DB
 /dist
 /node_modules
 config/crypto.config.json
+webapp/config/db.local.php
