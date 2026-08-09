@@ -1,0 +1,11 @@
+{
+  "name": "xmrgateway-static",
+  "version": "1.0.0",
+  "description": "Static site generator for the AcceptXMR crypto payment gateway frontend",
+  "scripts": {
+    "build": "node scripts/build.js"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
